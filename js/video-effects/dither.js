@@ -124,8 +124,10 @@ window.DitherApp = window.DitherApp || {};
     eng.cancelExport = false;
 
     const vw = _video.videoWidth, vh = _video.videoHeight;
+    // Cap at preview resolution — dither algorithm is too slow for real-time at full res
+    const [ew, eh] = previewSize(vw, vh);
     const expCanvas = document.createElement('canvas');
-    expCanvas.width = vw; expCanvas.height = vh;
+    expCanvas.width = ew; expCanvas.height = eh;
     const expCtx = expCanvas.getContext('2d', { willReadFrequently: true });
 
     const expEng  = { noiseSeed: eng.noiseSeed, frameCount: 0 };
@@ -156,8 +158,8 @@ window.DitherApp = window.DitherApp || {};
         if (ct >= _video.duration - 0.08)           { resolve(); return; } // near end
         prevTime = ct;
 
-        expCtx.drawImage(_video, 0, 0, vw, vh);
-        const imgData = expCtx.getImageData(0, 0, vw, vh);
+        expCtx.drawImage(_video, 0, 0, ew, eh);
+        const imgData = expCtx.getImageData(0, 0, ew, eh);
         expEng.noiseSeed  += state.noiseSeedSpeed * (1 - state.temporalStability) / 60;
         expEng.frameCount += 1;
         const result = DitherApp.processFrame(imgData, state, expEng, expPool);

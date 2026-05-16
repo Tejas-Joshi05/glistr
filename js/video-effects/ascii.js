@@ -304,13 +304,17 @@
     _exporting = true; _cancelExport = false;
 
     const vw = _video.videoWidth, vh = _video.videoHeight;
+    // Cap at 480p — matching preview resolution so fillText loop stays real-time
+    const MAXH = 480;
+    const scale = vh > MAXH ? MAXH / vh : 1;
+    const ew = Math.round(vw * scale), eh = Math.round(vh * scale);
 
     const srcCanvas = document.createElement('canvas');
-    srcCanvas.width = vw; srcCanvas.height = vh;
+    srcCanvas.width = ew; srcCanvas.height = eh;
     const srcCtx = srcCanvas.getContext('2d', { willReadFrequently: true });
 
     const expCanvas = document.createElement('canvas');
-    expCanvas.width = vw; expCanvas.height = vh;
+    expCanvas.width = ew; expCanvas.height = eh;
     const expCtx = expCanvas.getContext('2d');
 
     const origDisplay = displayCanvas, origDisplayCtx = displayCtx;
@@ -341,8 +345,8 @@
         if (ct >= _video.duration - 0.08)           { resolve(); return; } // near end
         prevTime = ct;
 
-        srcCtx.drawImage(_video, 0, 0, vw, vh);
-        const imgData = srcCtx.getImageData(0, 0, vw, vh);
+        srcCtx.drawImage(_video, 0, 0, ew, eh);
+        const imgData = srcCtx.getImageData(0, 0, ew, eh);
         renderASCII(imgData);
 
         VideoEffects.setExportUI(true, ct / _video.duration);
