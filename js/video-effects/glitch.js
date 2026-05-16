@@ -424,9 +424,7 @@
     if (!mime) { alert('MediaRecorder not supported in this browser.'); return; }
     const ext = mime.includes('mp4') ? 'mp4' : 'webm';
 
-    _exporting    = true;
-    _cancelExport = false;
-    _video.pause();
+    _exporting = true; _cancelExport = false;
 
     const vw = _video.videoWidth, vh = _video.videoHeight;
 
@@ -438,53 +436,58 @@
     expSampleCanvas.width = vw; expSampleCanvas.height = vh;
     const expSampleCtx = expSampleCanvas.getContext('2d', { willReadFrequently: true });
 
-    // Swap all module-level state to export canvases
-    const origDisplay  = displayCanvas,  origDisplayCtx  = displayCtx;
-    const origSample   = sampleCanvas,   origSampleCtx   = sampleCtx;
-    const origOut      = outBuf,         origEcho        = echoBuf;
-    const origStutter  = stutterFrame,   origCountdown   = stutterCountdown;
-    const origFc       = frameCount;
+    const origDisplay = displayCanvas,  origDisplayCtx  = displayCtx;
+    const origSample  = sampleCanvas,   origSampleCtx   = sampleCtx;
+    const origOut     = outBuf,         origEcho        = echoBuf;
+    const origStutter = stutterFrame,   origCountdown   = stutterCountdown;
+    const origFc      = frameCount;
 
     displayCanvas = expCanvas;       displayCtx = expCtx;
     sampleCanvas  = expSampleCanvas; sampleCtx  = expSampleCtx;
-    outBuf = null; echoBuf = null; stutterFrame = null; stutterCountdown = 0; frameCount = 0;
+    outBuf = null; echoBuf = null; stutterFrame = null;
+    stutterCountdown = 0; frameCount = 0;
 
-    const stream   = expCanvas.captureStream(0);
-    const track    = stream.getVideoTracks()[0];
+    await new Promise(resolve => {
+      const done = () => { clearTimeout(t); resolve(); };
+      const t = setTimeout(done, 800);
+      _video.addEventListener('seeked', done, { once: true });
+      _video.currentTime = 0;
+    });
+
+    const stream   = expCanvas.captureStream(30);
     const recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 16_000_000 });
     const chunks   = [];
     recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
 
     VideoEffects.setExportUI(true, 0);
     recorder.start();
+    _video.play();
 
-    const FPS      = 30;
-    const total    = Math.ceil(_video.duration * FPS);
-    const recStart = performance.now();
+    await new Promise(resolve => {
+      let prevTime = -1;
+      function frame() {
+        if (_cancelExport) { resolve(); return; }
+        const ct = _video.currentTime;
+        if (prevTime > 0.5 && ct < prevTime - 0.5) { resolve(); return; } // video looped
+        if (ct >= _video.duration - 0.08)           { resolve(); return; } // near end
+        prevTime = ct;
 
-    for (let fi = 0; fi < total; fi++) {
-      if (_cancelExport) break;
-      _video.currentTime = fi / FPS;
-      await waitSeeked(_video);
+        frameCount++;
+        renderGlitch(_video);
 
-      frameCount = fi;
-      renderGlitch(_video);
-
-      const targetMs  = fi * (1000 / FPS);
-      const elapsedMs = performance.now() - recStart;
-      if (elapsedMs < targetMs) await sleep(targetMs - elapsedMs);
-
-      track.requestFrame();
-      VideoEffects.setExportUI(true, (fi + 1) / total);
-    }
-
+        VideoEffects.setExportUI(true, ct / _video.duration);
+        requestAnimationFrame(frame);
+      }
+      requestAnimationFrame(frame);
+    });
+    await sleep(200);
     recorder.stop();
     await new Promise(r => { recorder.onstop = r; });
 
-    displayCanvas = origDisplay;    displayCtx  = origDisplayCtx;
-    sampleCanvas  = origSample;     sampleCtx   = origSampleCtx;
-    outBuf        = origOut;        echoBuf     = origEcho;
-    stutterFrame  = origStutter;    stutterCountdown = origCountdown;
+    displayCanvas = origDisplay;  displayCtx  = origDisplayCtx;
+    sampleCanvas  = origSample;   sampleCtx   = origSampleCtx;
+    outBuf        = origOut;      echoBuf     = origEcho;
+    stutterFrame  = origStutter;  stutterCountdown = origCountdown;
     frameCount    = origFc;
 
     if (!_cancelExport) {
@@ -497,9 +500,9 @@
 
     _exporting = false;
     VideoEffects.setExportUI(false, 0);
-    _video.currentTime = 0;
-    _video.play();
-    document.getElementById('btn-play').textContent = 'Pause';
+    _video.pause();
+    dirty = true;
+    document.getElementById('btn-play').textContent = 'Play';
   }
 
   VideoEffects.register('glitch', {

@@ -112,64 +112,63 @@ window.DitherApp = window.DitherApp || {};
 
   async function exportFullRes() {
     if (!eng.hasVideo || eng.exporting) return;
-
     const mime = [
-      'video/mp4;codecs=avc1.640028',
-      'video/mp4;codecs=avc1.42E01E',
-      'video/mp4;codecs=avc1',
-      'video/mp4',
-      'video/webm;codecs=vp9',
-      'video/webm;codecs=vp8',
-      'video/webm',
+      'video/mp4;codecs=avc1.640028','video/mp4;codecs=avc1.42E01E',
+      'video/mp4;codecs=avc1','video/mp4',
+      'video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm',
     ].find(t => MediaRecorder.isTypeSupported(t));
     if (!mime) { alert('MediaRecorder not supported in this browser.'); return; }
     const ext = mime.includes('mp4') ? 'mp4' : 'webm';
 
     eng.exporting    = true;
     eng.cancelExport = false;
-    _video.pause();
 
     const vw = _video.videoWidth, vh = _video.videoHeight;
-    const exportCanvas = document.createElement('canvas');
-    exportCanvas.width  = vw;
-    exportCanvas.height = vh;
-    const exportCtx = exportCanvas.getContext('2d', { willReadFrequently: true });
-    exportPool.hasPrev = false;
+    const expCanvas = document.createElement('canvas');
+    expCanvas.width = vw; expCanvas.height = vh;
+    const expCtx = expCanvas.getContext('2d', { willReadFrequently: true });
 
-    const stream   = exportCanvas.captureStream(0);
-    const track    = stream.getVideoTracks()[0];
+    const expEng  = { noiseSeed: eng.noiseSeed, frameCount: 0 };
+    const expPool = DitherApp.makePool();
+
+    await new Promise(resolve => {
+      const done = () => { clearTimeout(t); resolve(); };
+      const t = setTimeout(done, 800);
+      _video.addEventListener('seeked', done, { once: true });
+      _video.currentTime = 0;
+    });
+
+    const stream   = expCanvas.captureStream(30);
     const recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 16_000_000 });
     const chunks   = [];
     recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
 
     VideoEffects.setExportUI(true, 0);
     recorder.start();
+    _video.play();
 
-    const FPS      = 30;
-    const duration = _video.duration;
-    const total    = Math.ceil(duration * FPS);
-    const recStart = performance.now();
+    await new Promise(resolve => {
+      let prevTime = -1;
+      function frame() {
+        if (eng.cancelExport) { resolve(); return; }
+        const ct = _video.currentTime;
+        if (prevTime > 0.5 && ct < prevTime - 0.5) { resolve(); return; } // video looped
+        if (ct >= _video.duration - 0.08)           { resolve(); return; } // near end
+        prevTime = ct;
 
-    for (let fi = 0; fi < total; fi++) {
-      if (eng.cancelExport) break;
+        expCtx.drawImage(_video, 0, 0, vw, vh);
+        const imgData = expCtx.getImageData(0, 0, vw, vh);
+        expEng.noiseSeed  += state.noiseSeedSpeed * (1 - state.temporalStability) / 60;
+        expEng.frameCount += 1;
+        const result = DitherApp.processFrame(imgData, state, expEng, expPool);
+        expCtx.putImageData(result, 0, 0);
 
-      _video.currentTime = fi / FPS;
-      await waitSeeked(_video);
-
-      exportCtx.drawImage(_video, 0, 0, vw, vh);
-      const imgData   = exportCtx.getImageData(0, 0, vw, vh);
-      const exportEng = { noiseSeed: eng.noiseSeed + fi * 0.1 };
-      const result    = DitherApp.processFrame(imgData, state, exportEng, exportPool);
-      exportCtx.putImageData(result, 0, 0);
-
-      const targetMs  = fi * (1000 / FPS);
-      const elapsedMs = performance.now() - recStart;
-      if (elapsedMs < targetMs) await sleep(targetMs - elapsedMs);
-
-      track.requestFrame();
-      VideoEffects.setExportUI(true, (fi + 1) / total);
-    }
-
+        VideoEffects.setExportUI(true, ct / _video.duration);
+        requestAnimationFrame(frame);
+      }
+      requestAnimationFrame(frame);
+    });
+    await sleep(200);
     recorder.stop();
     await new Promise(r => { recorder.onstop = r; });
 
@@ -183,9 +182,9 @@ window.DitherApp = window.DitherApp || {};
 
     eng.exporting = false;
     VideoEffects.setExportUI(false, 0);
-    _video.currentTime = 0;
-    _video.play();
-    document.getElementById('btn-play').textContent = 'Pause';
+    _video.pause();
+    eng.dirty = true;
+    document.getElementById('btn-play').textContent = 'Play';
   }
 
   function waitSeeked(v) {
