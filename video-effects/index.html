@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>glistr</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Nunito:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+
+    <link rel="stylesheet" href="../css/reset.css" />
+    <link rel="stylesheet" href="../css/style.css" />
+    <link rel="stylesheet" href="../css/video-effects/dither.css" />
+  </head>
+  <body>
+
+    <!-- ── Effect tab bar ───────────────────────────────────────────────────── -->
+    <div class="effect-nav">
+      <button class="effect-tab active" data-tab="dither">
+        <span class="effect-tab__name">Dither</span>
+        <span class="effect-tab__hint">Pixel art &amp; retro palettes</span>
+      </button>
+      <button class="effect-tab" data-tab="ascii">
+        <span class="effect-tab__name">ASCII Art</span>
+        <span class="effect-tab__hint">Character-based rendering</span>
+      </button>
+      <button class="effect-tab" data-tab="blob">
+        <span class="effect-tab__name">Blob Tracker</span>
+        <span class="effect-tab__hint">Motion detection boxes</span>
+      </button>
+      <button class="effect-tab" data-tab="glitch">
+        <span class="effect-tab__name">Glitch</span>
+        <span class="effect-tab__hint">Digital corruption &amp; artifacts</span>
+      </button>
+    </div>
+
+    <!-- ── Tab panels ───────────────────────────────────────────────────────── -->
+    <div class="tab-panels-container">
+
+      <!-- DITHER -->
+      <div class="tab-panel" id="panel-dither">
+        <aside class="controls-panel" id="dither-controls"></aside>
+        <div class="canvas-area">
+          <div class="canvas-wrapper" id="dither-wrapper">
+            <div class="drop-overlay" id="dither-overlay">
+              <div class="drop-overlay__box">
+                <div class="drop-overlay__icon">▶</div>
+                <p class="drop-overlay__title">Drop a video here</p>
+                <p class="drop-overlay__sub">or click <strong>Load Video</strong> below</p>
+                <p class="drop-overlay__formats">MP4 · MOV · WebM · AVI</p>
+              </div>
+            </div>
+            <canvas id="dither-canvas"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- ASCII -->
+      <div class="tab-panel" id="panel-ascii" style="display:none">
+        <aside class="controls-panel" id="ascii-controls"></aside>
+        <div class="canvas-area">
+          <div class="canvas-wrapper" id="ascii-wrapper">
+            <div class="drop-overlay" id="ascii-overlay">
+              <div class="drop-overlay__box">
+                <div class="drop-overlay__icon drop-overlay__icon--mono">A</div>
+                <p class="drop-overlay__title">Drop a video here</p>
+                <p class="drop-overlay__sub">or click <strong>Load Video</strong> below</p>
+                <p class="drop-overlay__formats">MP4 · MOV · WebM · AVI</p>
+              </div>
+            </div>
+            <canvas id="ascii-canvas"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- BLOB TRACKER -->
+      <div class="tab-panel" id="panel-blob" style="display:none">
+        <aside class="controls-panel" id="blob-controls"></aside>
+        <div class="canvas-area">
+          <div class="canvas-wrapper" id="blob-wrapper">
+            <div class="drop-overlay" id="blob-overlay">
+              <div class="drop-overlay__box">
+                <div class="drop-overlay__icon drop-overlay__icon--tracker">⬡</div>
+                <p class="drop-overlay__title">Drop a video here</p>
+                <p class="drop-overlay__sub">or click <strong>Load Video</strong> below</p>
+                <p class="drop-overlay__formats">MP4 · MOV · WebM · AVI</p>
+              </div>
+            </div>
+            <canvas id="blob-canvas"></canvas>
+          </div>
+        </div>
+      </div>
+
+
+      <!-- GLITCH -->
+      <div class="tab-panel" id="panel-glitch" style="display:none">
+        <aside class="controls-panel" id="glitch-controls"></aside>
+        <div class="canvas-area">
+          <div class="canvas-wrapper" id="glitch-wrapper">
+            <div class="drop-overlay" id="glitch-overlay">
+              <div class="drop-overlay__box">
+                <div class="drop-overlay__icon drop-overlay__icon--glitch">&#x26A1;</div>
+                <p class="drop-overlay__title">Drop a video here</p>
+                <p class="drop-overlay__sub">or click <strong>Load Video</strong> below</p>
+                <p class="drop-overlay__formats">MP4 &middot; MOV &middot; WebM &middot; AVI</p>
+              </div>
+            </div>
+            <canvas id="glitch-canvas"></canvas>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /tab-panels-container -->
+
+    <!-- ── Shared toolbar ────────────────────────────────────────────────────── -->
+    <div class="shared-toolbar">
+      <!-- Seek bar (full-width row) -->
+      <div class="seek-row">
+        <span class="seek-time" id="seek-current">0:00</span>
+        <input type="range" id="seek-slider" class="seek-slider"
+               min="0" max="10000" step="1" value="0" disabled />
+        <span class="seek-time" id="seek-duration">0:00</span>
+      </div>
+      <span id="video-info">Load a video to begin</span>
+
+      <div id="export-bar" style="display:none">
+        <div class="export-track">
+          <div class="export-fill" id="export-fill"></div>
+        </div>
+        <span id="export-label" class="export-label">Exporting…</span>
+      </div>
+      <button class="btn btn--ghost btn--danger" id="btn-cancel-export" style="display:none">Cancel</button>
+
+      <button class="btn btn--ghost" id="btn-export-frame">Save Frame</button>
+      <button class="btn btn--ghost" id="btn-export-fullres" disabled>Export Video</button>
+
+      <div class="toolbar-sep toolbar-sep--push"></div>
+
+      <label class="btn btn--ghost toolbar-upload-label" title="Load a video file from your computer">
+        Load Video
+        <input type="file" id="video-input" accept="video/*" style="display:none" />
+      </label>
+
+      <button class="btn btn--ghost" id="btn-play" disabled>Play</button>
+    </div>
+
+    <!-- ── Scripts ──────────────────────────────────────────────────────────── -->
+    <!-- app.js must load first so VideoEffects.register() is available -->
+    <script src="../js/video-effects/app.js"></script>
+
+    <!-- Dither effect (order matters — pipeline deps before dither.js) -->
+    <script src="../js/video-effects/dither/state.js"></script>
+    <script src="../js/video-effects/dither/presets.js"></script>
+    <script src="../js/video-effects/dither/algorithms.js"></script>
+    <script src="../js/video-effects/dither/pipeline.js"></script>
+    <script src="../js/video-effects/dither/controls.js"></script>
+    <script src="../js/video-effects/dither.js"></script>
+
+    <!-- New effects -->
+    <script src="../js/video-effects/ascii.js"></script>
+    <script src="../js/video-effects/blob-tracker.js"></script>
+    <script src="../js/video-effects/glitch.js"></script>
+
+  </body>
+</html>
