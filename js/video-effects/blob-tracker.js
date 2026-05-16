@@ -16,6 +16,7 @@
   let prevFrameData = null;
   let frameCount = 0;
   let dirty = true;
+  let _video = null, _hasVideo = false, _exporting = false, _cancelExport = false;
 
   // ── Control builder ────────────────────────────────────────────────────────
 
@@ -340,6 +341,106 @@
 
   // ── Registration ───────────────────────────────────────────────────────────
 
+
+  function waitSeeked(v) {
+    return new Promise(resolve => {
+      v.addEventListener('seeked', () => setTimeout(resolve, 16), { once: true });
+    });
+  }
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+  function pickMime() {
+    return [
+      'video/mp4;codecs=avc1.640028',
+      'video/mp4;codecs=avc1.42E01E',
+      'video/mp4;codecs=avc1',
+      'video/mp4',
+      'video/webm;codecs=vp9',
+      'video/webm;codecs=vp8',
+      'video/webm',
+    ].find(t => MediaRecorder.isTypeSupported(t));
+  }
+
+  async function exportFullRes() {
+    if (!_video || !_hasVideo || _exporting) return;
+    const mime = pickMime();
+    if (!mime) { alert('MediaRecorder not supported in this browser.'); return; }
+    const ext = mime.includes('mp4') ? 'mp4' : 'webm';
+
+    _exporting    = true;
+    _cancelExport = false;
+    _video.pause();
+
+    const vw = _video.videoWidth, vh = _video.videoHeight;
+
+    // Export canvas — final output with boxes drawn on
+    const expCanvas = document.createElement('canvas');
+    expCanvas.width = vw; expCanvas.height = vh;
+    const expCtx = expCanvas.getContext('2d');
+
+    // Full-res capture canvas for export (no 240p cap — we want quality)
+    const expCaptureCanvas = document.createElement('canvas');
+    expCaptureCanvas.width = vw; expCaptureCanvas.height = vh;
+    const expCaptureCtx = expCaptureCanvas.getContext('2d', { willReadFrequently: true });
+
+    // Swap module-level canvases so renderFrame() works on export canvases
+    const origDisplay     = displayCanvas,  origDisplayCtx  = displayCtx;
+    const origCapture     = captureCanvas,  origCaptureCtx  = captureCtx;
+    const origPrev        = prevFrameData;
+    displayCanvas = expCanvas;        displayCtx = expCtx;
+    captureCanvas = expCaptureCanvas; captureCtx = expCaptureCtx;
+    prevFrameData = null;
+
+    const stream   = expCanvas.captureStream(0);
+    const track    = stream.getVideoTracks()[0];
+    const recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 16_000_000 });
+    const chunks   = [];
+    recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+
+    VideoEffects.setExportUI(true, 0);
+    recorder.start();
+
+    const FPS      = 30;
+    const total    = Math.ceil(_video.duration * FPS);
+    const recStart = performance.now();
+
+    for (let fi = 0; fi < total; fi++) {
+      if (_cancelExport) break;
+      _video.currentTime = fi / FPS;
+      await waitSeeked(_video);
+
+      renderFrame(_video);
+
+      const targetMs  = fi * (1000 / FPS);
+      const elapsedMs = performance.now() - recStart;
+      if (elapsedMs < targetMs) await sleep(targetMs - elapsedMs);
+
+      track.requestFrame();
+      VideoEffects.setExportUI(true, (fi + 1) / total);
+    }
+
+    recorder.stop();
+    await new Promise(r => { recorder.onstop = r; });
+
+    displayCanvas = origDisplay;     displayCtx = origDisplayCtx;
+    captureCanvas = origCapture;     captureCtx = origCaptureCtx;
+    prevFrameData = origPrev;
+
+    if (!_cancelExport) {
+      const blob = new Blob(chunks, { type: mime });
+      const a    = document.createElement('a');
+      a.href     = URL.createObjectURL(blob);
+      a.download = 'blob-fullres.' + ext;
+      a.click();
+    }
+
+    _exporting = false;
+    VideoEffects.setExportUI(false, 0);
+    _video.currentTime = 0;
+    _video.play();
+    document.getElementById('btn-play').textContent = 'Pause';
+  }
+
   VideoEffects.register('blob', {
 
     init: function (canvas, controlsEl) {
@@ -359,6 +460,7 @@
     },
 
     onVideoLoad: function (v, vw, vh) {
+      _video = v; _hasVideo = true;
       // Capture at most 240p for perf (scale down if larger)
       const MAXH = 240;
       let cw = vw, ch = vh;
@@ -381,6 +483,7 @@
     deactivate: function () {},
 
     tick: function (v, hasVideo) {
+      if (_exporting) return;
       if (!hasVideo || !v || v.readyState < 2) {
         if (dirty) { drawEmptyState(); dirty = false; }
         return;
@@ -404,9 +507,11 @@
     },
 
     onSeek: function () {
-      prevFrameData = null; // can't diff against a frame from a different timestamp
+      prevFrameData = null;
       dirty = true;
     },
+    exportFullRes: exportFullRes,
+    cancelExport:  function () { _cancelExport = true; },
 
   });
 })();
