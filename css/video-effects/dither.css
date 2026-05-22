@@ -229,6 +229,25 @@ details[open] .controls-section__header::after { content: '−'; }
 
 .control__select:focus { background-color: #333; }
 
+.control__text {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  background: #2a2a2a;
+  border: none;
+  border-radius: var(--radius);
+  color: var(--text);
+  font-family: monospace;
+  font-size: 0.73rem;
+  padding: 5px 8px;
+  cursor: text;
+  outline: none;
+  letter-spacing: 0.05em;
+}
+
+.control__text::placeholder { color: var(--muted); }
+.control__text:focus { background-color: #333; }
+
 .control__toggle {
   display: flex;
   border: 1px solid var(--border-2);
