@@ -4,16 +4,14 @@ window.VideoEffects = window.VideoEffects || {};
   'use strict';
 
   const _registry = {};
-  let _active = null;
-  const _shared = { video: null, hasVideo: false };
-  let _isSeeking = false;   // module-level so loadVideo's timeupdate can read it
+  let _active    = null;
+  let _realVideo = null;          // always an HTMLVideoElement
+  const _shared  = { video: null, hasVideo: false, isImage: false };
+  let _isSeeking = false;
 
   // ── Public API ─────────────────────────────────────────────────────────────
 
-  VideoEffects.register = function (name, def) {
-    _registry[name] = def;
-  };
-
+  VideoEffects.register    = function (name, def) { _registry[name] = def; };
   VideoEffects.getVideo    = function () { return _shared.video; };
   VideoEffects.getHasVideo = function () { return _shared.hasVideo; };
 
@@ -36,11 +34,11 @@ window.VideoEffects = window.VideoEffects || {};
     if (active) {
       const pct = Math.round(progress * 100);
       fill.style.width  = pct + '%';
-      label.textContent = pct < 100 ? `Exporting… ${pct}%` : 'Finishing…';
+      label.textContent = pct < 100 ? 'Exporting\u2026 ' + pct + '%' : 'Finishing\u2026';
     }
   };
 
-  // ── Seek helpers ───────────────────────────────────────────────────────────
+  // ── Helpers ────────────────────────────────────────────────────────────────
 
   function formatTime(s) {
     const m = Math.floor(s / 60);
@@ -58,22 +56,21 @@ window.VideoEffects = window.VideoEffects || {};
   // ── DOMContentLoaded ───────────────────────────────────────────────────────
 
   document.addEventListener('DOMContentLoaded', function () {
-    // Shared video element (never inserted into DOM)
-    const video = document.createElement('video');
-    video.playsInline = true;
-    video.loop  = true;
-    video.muted = true;
-    _shared.video = video;
+    _realVideo             = document.createElement('video');
+    _realVideo.playsInline = true;
+    _realVideo.loop        = true;
+    _realVideo.muted       = true;
+    _shared.video          = _realVideo;
 
-    // Keep scrubber in sync during playback (set up once here)
-    video.addEventListener('timeupdate', function () {
-      if (_isSeeking || !video.duration) return;
+    // Keep seek slider in sync during playback
+    _realVideo.addEventListener('timeupdate', function () {
+      if (_shared.isImage || _isSeeking || !_realVideo.duration) return;
       const slider = document.getElementById('seek-slider');
-      slider.value = (video.currentTime / video.duration) * 10000;
-      updateSeekDisplay(video.currentTime, video.duration);
+      slider.value = (_realVideo.currentTime / _realVideo.duration) * 10000;
+      updateSeekDisplay(_realVideo.currentTime, _realVideo.duration);
     });
 
-    // Init each effect
+    // Init every registered effect
     for (const [name, def] of Object.entries(_registry)) {
       const canvas   = document.getElementById(name + '-canvas');
       const controls = document.getElementById(name + '-controls');
@@ -85,18 +82,15 @@ window.VideoEffects = window.VideoEffects || {};
       tab.addEventListener('click', function () { switchTo(tab.dataset.tab); });
     });
 
-    // Activate the first tab
     const firstTab = document.querySelector('.effect-tab.active');
     if (firstTab) {
       _active = firstTab.dataset.tab;
-      if (_registry[_active] && _registry[_active].activate) {
-        _registry[_active].activate();
-      }
+      if (_registry[_active] && _registry[_active].activate) _registry[_active].activate();
     }
 
-    // File input
+    // File input — accepts video and image
     document.getElementById('video-input').addEventListener('change', function (e) {
-      if (e.target.files[0]) loadVideo(e.target.files[0]);
+      if (e.target.files[0]) loadMedia(e.target.files[0]);
     });
 
     // Drag-and-drop on every canvas wrapper
@@ -112,7 +106,7 @@ window.VideoEffects = window.VideoEffects || {};
         e.preventDefault();
         wrapper.classList.remove('drag-over');
         const f = e.dataTransfer.files[0];
-        if (f && f.type.startsWith('video/')) loadVideo(f);
+        if (f) loadMedia(f);
       });
     });
 
@@ -139,18 +133,14 @@ window.VideoEffects = window.VideoEffects || {};
 
     // Seek slider
     const seekSlider = document.getElementById('seek-slider');
-
     seekSlider.addEventListener('mousedown',  function () { _isSeeking = true; });
     seekSlider.addEventListener('touchstart', function () { _isSeeking = true; }, { passive: true });
     seekSlider.addEventListener('mouseup',    function () { _isSeeking = false; });
     seekSlider.addEventListener('touchend',   function () { _isSeeking = false; });
-
     seekSlider.addEventListener('input', function () {
-      const v = _shared.video;
-      if (!_shared.hasVideo || !v.duration) return;
-      v.currentTime = (parseFloat(seekSlider.value) / 10000) * v.duration;
-      updateSeekDisplay(v.currentTime, v.duration);
-      // Tell the active effect to re-render the seeked frame
+      if (_shared.isImage || !_shared.hasVideo || !_realVideo.duration) return;
+      _realVideo.currentTime = (parseFloat(seekSlider.value) / 10000) * _realVideo.duration;
+      updateSeekDisplay(_realVideo.currentTime, _realVideo.duration);
       if (_registry[_active] && _registry[_active].onSeek) _registry[_active].onSeek();
     });
 
@@ -169,33 +159,39 @@ window.VideoEffects = window.VideoEffects || {};
     document.querySelectorAll('.effect-tab').forEach(function (t) {
       t.classList.toggle('active', t.dataset.tab === name);
     });
-
     document.querySelectorAll('.tab-panel').forEach(function (p) {
       p.style.display = p.id === 'panel-' + name ? 'flex' : 'none';
     });
 
     _active = name;
-
-    if (_registry[_active] && _registry[_active].activate) {
-      _registry[_active].activate();
-    }
+    if (_registry[_active] && _registry[_active].activate) _registry[_active].activate();
 
     const btnFull = document.getElementById('btn-export-fullres');
-    btnFull.disabled = !(_shared.hasVideo && !!(_registry[_active] && _registry[_active].exportFullRes));
+    btnFull.disabled = !(
+      _shared.hasVideo &&
+      !_shared.isImage &&
+      !!(_registry[_active] && _registry[_active].exportFullRes)
+    );
   }
 
-  // ── Video loading ──────────────────────────────────────────────────────────
+  // ── Media loading ──────────────────────────────────────────────────────────
+
+  function loadMedia(file) {
+    if      (file.type.startsWith('video/')) loadVideo(file);
+    else if (file.type.startsWith('image/')) loadImage(file);
+  }
 
   function loadVideo(file) {
-    const v = _shared.video;
-    if (v.src) URL.revokeObjectURL(v.src);
-    v.src = URL.createObjectURL(file);
+    _shared.isImage = false;
+    if (_realVideo.src) URL.revokeObjectURL(_realVideo.src);
+    _realVideo.src = URL.createObjectURL(file);
+    _shared.video  = _realVideo;
 
-    v.onloadedmetadata = function () {
+    _realVideo.onloadedmetadata = function () {
       _shared.hasVideo = true;
 
       for (const [, def] of Object.entries(_registry)) {
-        if (def.onVideoLoad) def.onVideoLoad(v, v.videoWidth, v.videoHeight);
+        if (def.onVideoLoad) def.onVideoLoad(_realVideo, _realVideo.videoWidth, _realVideo.videoHeight);
       }
 
       document.getElementById('btn-play').disabled    = false;
@@ -204,28 +200,75 @@ window.VideoEffects = window.VideoEffects || {};
       const btnFull = document.getElementById('btn-export-fullres');
       btnFull.disabled = !(_registry[_active] && _registry[_active].exportFullRes);
 
-      document.querySelectorAll('.drop-overlay').forEach(function (o) {
-        o.classList.add('hidden');
-      });
+      document.querySelectorAll('.drop-overlay').forEach(function (o) { o.classList.add('hidden'); });
 
       const seekSlider = document.getElementById('seek-slider');
       seekSlider.disabled = false;
       seekSlider.value    = 0;
-      updateSeekDisplay(0, v.duration);
+      updateSeekDisplay(0, _realVideo.duration);
 
       VideoEffects.setVideoInfo('');
-      v.play();
+      _realVideo.play();
     };
   }
 
+  function loadImage(file) {
+    _shared.isImage = true;
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+
+    img.onload = function () {
+      URL.revokeObjectURL(url);
+
+      // A canvas mimics a video element as a drawImage-compatible source
+      const imgCanvas      = document.createElement('canvas');
+      imgCanvas.width      = img.naturalWidth;
+      imgCanvas.height     = img.naturalHeight;
+      imgCanvas.getContext('2d').drawImage(img, 0, 0);
+
+      // Fake video properties so every effect works without modification
+      imgCanvas.videoWidth  = img.naturalWidth;
+      imgCanvas.videoHeight = img.naturalHeight;
+      imgCanvas.readyState  = 4;
+      imgCanvas.paused      = false;   // treated as "playing" so effects render
+      imgCanvas.currentTime = 0;
+      imgCanvas.duration    = 0;
+      imgCanvas.play        = function () {};
+      imgCanvas.pause       = function () {};
+
+      if (!_realVideo.paused) _realVideo.pause();
+      _shared.video    = imgCanvas;
+      _shared.hasVideo = true;
+
+      for (const [, def] of Object.entries(_registry)) {
+        if (def.onVideoLoad) def.onVideoLoad(imgCanvas, img.naturalWidth, img.naturalHeight);
+      }
+
+      document.getElementById('btn-play').disabled    = true;
+      document.getElementById('btn-play').textContent = 'Play';
+      document.getElementById('btn-export-fullres').disabled = true;
+
+      document.querySelectorAll('.drop-overlay').forEach(function (o) { o.classList.add('hidden'); });
+
+      const seekSlider = document.getElementById('seek-slider');
+      seekSlider.disabled = true;
+      seekSlider.value    = 0;
+      updateSeekDisplay(0, 0);
+      VideoEffects.setVideoInfo('');
+    };
+
+    img.src = url;
+  }
+
+  // ── Play / Pause ───────────────────────────────────────────────────────────
+
   function togglePlay() {
-    const v = _shared.video;
-    if (!_shared.hasVideo) return;
-    if (v.paused) {
-      v.play();
+    if (!_shared.hasVideo || _shared.isImage) return;
+    if (_realVideo.paused) {
+      _realVideo.play();
       document.getElementById('btn-play').textContent = 'Pause';
     } else {
-      v.pause();
+      _realVideo.pause();
       document.getElementById('btn-play').textContent = 'Play';
     }
   }
