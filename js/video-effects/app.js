@@ -243,6 +243,13 @@ window.VideoEffects = window.VideoEffects || {};
       });
     });
 
+    // Click-to-browse on every drop overlay
+    document.querySelectorAll('.drop-overlay').forEach(function (overlay) {
+      overlay.addEventListener('click', function () {
+        document.getElementById('video-input').click();
+      });
+    });
+
     // Toolbar buttons
     document.getElementById('btn-play').addEventListener('click', togglePlay);
 
