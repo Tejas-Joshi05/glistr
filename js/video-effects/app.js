@@ -16,6 +16,10 @@ window.VideoEffects = window.VideoEffects || {};
   let _isPanning = false;
   let _panMouseX = 0;
   let _panMouseY = 0;
+  // Pinch-to-zoom touch state
+  let _touchStartDist = null;
+  let _touchStartZoom = null;
+
   const ZOOM_MIN  = 0.1;
   const ZOOM_MAX  = 8;
   const ZOOM_STEP = 1.15;
@@ -27,23 +31,23 @@ window.VideoEffects = window.VideoEffects || {};
   VideoEffects.getHasVideo = function () { return _shared.hasVideo; };
 
   VideoEffects.setVideoInfo = function (text) {
-    const el = document.getElementById('video-info');
+    var el = document.getElementById('video-info');
     if (el) el.textContent = text;
   };
 
   VideoEffects.setExportUI = function (active, progress) {
-    const bar    = document.getElementById('export-bar');
-    const fill   = document.getElementById('export-fill');
-    const label  = document.getElementById('export-label');
-    const btnExp = document.getElementById('btn-export-fullres');
-    const btnCan = document.getElementById('btn-cancel-export');
+    var bar    = document.getElementById('export-bar');
+    var fill   = document.getElementById('export-fill');
+    var label  = document.getElementById('export-label');
+    var btnExp = document.getElementById('btn-export-fullres');
+    var btnCan = document.getElementById('btn-cancel-export');
 
     bar.style.display    = active ? 'flex' : 'none';
     btnExp.disabled      = active;
     btnCan.style.display = active ? '' : 'none';
 
     if (active) {
-      const pct = Math.round(progress * 100);
+      var pct = Math.round(progress * 100);
       fill.style.width  = pct + '%';
       label.textContent = pct < 100 ? 'Exporting… ' + pct + '%' : 'Finishing…';
     }
@@ -52,13 +56,13 @@ window.VideoEffects = window.VideoEffects || {};
   // ── Helpers ────────────────────────────────────────────────────────────────
 
   function formatTime(s) {
-    const m = Math.floor(s / 60);
+    var m = Math.floor(s / 60);
     return m + ':' + String(Math.floor(s % 60)).padStart(2, '0');
   }
 
   function updateSeekDisplay(currentTime, duration) {
-    const slider = document.getElementById('seek-slider');
-    const pct    = duration ? (currentTime / duration) * 100 : 0;
+    var slider = document.getElementById('seek-slider');
+    var pct    = duration ? (currentTime / duration) * 100 : 0;
     slider.style.setProperty('--seek-pct', pct.toFixed(2) + '%');
     document.getElementById('seek-current').textContent  = formatTime(currentTime);
     document.getElementById('seek-duration').textContent = formatTime(duration || 0);
@@ -71,11 +75,11 @@ window.VideoEffects = window.VideoEffects || {};
   }
 
   function applyZoomTransform() {
-    const canvas = getActiveCanvas();
+    var canvas = getActiveCanvas();
     if (!canvas) return;
     canvas.style.transformOrigin = 'center center';
     canvas.style.transform = 'translate(' + _panX + 'px, ' + _panY + 'px) scale(' + _zoom + ')';
-    const el = document.getElementById('zoom-level');
+    var el = document.getElementById('zoom-level');
     if (el) el.textContent = Math.round(_zoom * 100) + '%';
     updateCursors();
   }
@@ -96,6 +100,16 @@ window.VideoEffects = window.VideoEffects || {};
     applyZoomTransform();
   }
 
+  // ── Mobile controls panel toggle ───────────────────────────────────────────
+
+  function closeMobileControls() {
+    document.querySelectorAll('.controls-panel').forEach(function (p) {
+      p.classList.remove('mobile-open');
+    });
+    var b = document.getElementById('btn-controls-mobile');
+    if (b) b.textContent = 'Controls';
+  }
+
   // ── DOMContentLoaded ───────────────────────────────────────────────────────
 
   document.addEventListener('DOMContentLoaded', function () {
@@ -107,14 +121,15 @@ window.VideoEffects = window.VideoEffects || {};
 
     _realVideo.addEventListener('timeupdate', function () {
       if (_shared.isImage || _isSeeking || !_realVideo.duration) return;
-      const slider = document.getElementById('seek-slider');
+      var slider = document.getElementById('seek-slider');
       slider.value = (_realVideo.currentTime / _realVideo.duration) * 10000;
       updateSeekDisplay(_realVideo.currentTime, _realVideo.duration);
     });
 
-    for (const [name, def] of Object.entries(_registry)) {
-      const canvas   = document.getElementById(name + '-canvas');
-      const controls = document.getElementById(name + '-controls');
+    for (var name in _registry) {
+      var def      = _registry[name];
+      var canvas   = document.getElementById(name + '-canvas');
+      var controls = document.getElementById(name + '-controls');
       if (def.init) def.init(canvas, controls);
     }
 
@@ -124,7 +139,7 @@ window.VideoEffects = window.VideoEffects || {};
       });
     });
 
-    const firstTab = document.querySelector('.effect-tab.active');
+    var firstTab = document.querySelector('.effect-tab.active');
     if (firstTab) {
       _active = firstTab.dataset.tab;
       if (_registry[_active] && _registry[_active].activate) _registry[_active].activate();
@@ -134,8 +149,9 @@ window.VideoEffects = window.VideoEffects || {};
       if (e.target.files[0]) loadMedia(e.target.files[0]);
     });
 
-    // Drag-and-drop + wheel zoom + mouse pan on every canvas wrapper
+    // ── Canvas wrappers: drag-drop, wheel zoom, mouse pan, touch pan/pinch ──
     document.querySelectorAll('.canvas-wrapper').forEach(function (wrapper) {
+
       // Drag-and-drop
       wrapper.addEventListener('dragover', function (e) {
         e.preventDefault();
@@ -147,7 +163,7 @@ window.VideoEffects = window.VideoEffects || {};
       wrapper.addEventListener('drop', function (e) {
         e.preventDefault();
         wrapper.classList.remove('drag-over');
-        const f = e.dataTransfer.files[0];
+        var f = e.dataTransfer.files[0];
         if (f) loadMedia(f);
       });
 
@@ -181,6 +197,50 @@ window.VideoEffects = window.VideoEffects || {};
         _isPanning = false;
         updateCursors();
       });
+
+      // Touch: single-finger pan, two-finger pinch-to-zoom
+      wrapper.addEventListener('touchstart', function (e) {
+        if (e.touches.length === 2) {
+          var dx = e.touches[0].clientX - e.touches[1].clientX;
+          var dy = e.touches[0].clientY - e.touches[1].clientY;
+          _touchStartDist = Math.sqrt(dx * dx + dy * dy);
+          _touchStartZoom = _zoom;
+          _isPanning = false;
+        } else if (e.touches.length === 1) {
+          _isPanning = true;
+          _panMouseX = e.touches[0].clientX;
+          _panMouseY = e.touches[0].clientY;
+        }
+      }, { passive: true });
+
+      wrapper.addEventListener('touchmove', function (e) {
+        if (e.touches.length === 2 && _touchStartDist !== null) {
+          e.preventDefault();
+          var dx   = e.touches[0].clientX - e.touches[1].clientX;
+          var dy   = e.touches[0].clientY - e.touches[1].clientY;
+          var dist = Math.sqrt(dx * dx + dy * dy);
+          _zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, _touchStartZoom * (dist / _touchStartDist)));
+          applyZoomTransform();
+        } else if (e.touches.length === 1 && _isPanning) {
+          e.preventDefault();
+          _panX += e.touches[0].clientX - _panMouseX;
+          _panY += e.touches[0].clientY - _panMouseY;
+          _panMouseX = e.touches[0].clientX;
+          _panMouseY = e.touches[0].clientY;
+          applyZoomTransform();
+        }
+      }, { passive: false });
+
+      wrapper.addEventListener('touchend', function () {
+        _isPanning      = false;
+        _touchStartDist = null;
+        _touchStartZoom = null;
+      });
+      wrapper.addEventListener('touchcancel', function () {
+        _isPanning      = false;
+        _touchStartDist = null;
+        _touchStartZoom = null;
+      });
     });
 
     // Toolbar buttons
@@ -209,8 +269,19 @@ window.VideoEffects = window.VideoEffects || {};
     document.getElementById('btn-zoom-out').addEventListener('click', function () { zoomBy(1 / ZOOM_STEP); });
     document.getElementById('zoom-level').addEventListener('click', resetZoom);
 
+    // Mobile: controls panel toggle
+    var ctrlBtn = document.getElementById('btn-controls-mobile');
+    if (ctrlBtn) {
+      ctrlBtn.addEventListener('click', function () {
+        var panel = document.querySelector('#panel-' + _active + ' .controls-panel');
+        if (!panel) return;
+        var isOpen = panel.classList.toggle('mobile-open');
+        ctrlBtn.textContent = isOpen ? 'Controls ▴' : 'Controls';
+      });
+    }
+
     // Seek slider
-    const seekSlider = document.getElementById('seek-slider');
+    var seekSlider = document.getElementById('seek-slider');
     seekSlider.addEventListener('mousedown',  function () { _isSeeking = true; });
     seekSlider.addEventListener('touchstart', function () { _isSeeking = true; }, { passive: true });
     seekSlider.addEventListener('mouseup',    function () { _isSeeking = false; });
@@ -244,12 +315,15 @@ window.VideoEffects = window.VideoEffects || {};
     _active = name;
     if (_registry[_active] && _registry[_active].activate) _registry[_active].activate();
 
-    const btnFull = document.getElementById('btn-export-fullres');
+    var btnFull = document.getElementById('btn-export-fullres');
     btnFull.disabled = !(
       _shared.hasVideo &&
       !_shared.isImage &&
       !!(_registry[_active] && _registry[_active].exportFullRes)
     );
+
+    // Close mobile controls panel on tab switch
+    closeMobileControls();
 
     applyZoomTransform();
   }
@@ -267,26 +341,26 @@ window.VideoEffects = window.VideoEffects || {};
     _realVideo.src = URL.createObjectURL(file);
     _shared.video  = _realVideo;
 
-    // Re-enable Blob Tracker tab for video
     var blobTab = document.querySelector('.effect-tab[data-tab="blob"]');
     if (blobTab) blobTab.disabled = false;
 
     _realVideo.onloadedmetadata = function () {
       _shared.hasVideo = true;
 
-      for (const [, def] of Object.entries(_registry)) {
+      for (var key in _registry) {
+        var def = _registry[key];
         if (def.onVideoLoad) def.onVideoLoad(_realVideo, _realVideo.videoWidth, _realVideo.videoHeight);
       }
 
       document.getElementById('btn-play').disabled    = false;
       document.getElementById('btn-play').textContent = 'Pause';
 
-      const btnFull = document.getElementById('btn-export-fullres');
+      var btnFull = document.getElementById('btn-export-fullres');
       btnFull.disabled = !(_registry[_active] && _registry[_active].exportFullRes);
 
       document.querySelectorAll('.drop-overlay').forEach(function (o) { o.classList.add('hidden'); });
 
-      const seekSlider = document.getElementById('seek-slider');
+      var seekSlider = document.getElementById('seek-slider');
       seekSlider.disabled = false;
       seekSlider.value    = 0;
       updateSeekDisplay(0, _realVideo.duration);
@@ -298,13 +372,13 @@ window.VideoEffects = window.VideoEffects || {};
 
   function loadImage(file) {
     _shared.isImage = true;
-    const url = URL.createObjectURL(file);
-    const img = new Image();
+    var url = URL.createObjectURL(file);
+    var img = new Image();
 
     img.onload = function () {
       URL.revokeObjectURL(url);
 
-      const imgCanvas      = document.createElement('canvas');
+      var imgCanvas      = document.createElement('canvas');
       imgCanvas.width      = img.naturalWidth;
       imgCanvas.height     = img.naturalHeight;
       imgCanvas.getContext('2d').drawImage(img, 0, 0);
@@ -322,14 +396,14 @@ window.VideoEffects = window.VideoEffects || {};
       _shared.video    = imgCanvas;
       _shared.hasVideo = true;
 
-      // Disable Blob Tracker; switch away if currently on it
       var blobTab = document.querySelector('.effect-tab[data-tab="blob"]');
       if (blobTab) {
         blobTab.disabled = true;
         if (_active === 'blob') switchTo('dither');
       }
 
-      for (const [, def] of Object.entries(_registry)) {
+      for (var key in _registry) {
+        var def = _registry[key];
         if (def.onVideoLoad) def.onVideoLoad(imgCanvas, img.naturalWidth, img.naturalHeight);
       }
 
@@ -339,7 +413,7 @@ window.VideoEffects = window.VideoEffects || {};
 
       document.querySelectorAll('.drop-overlay').forEach(function (o) { o.classList.add('hidden'); });
 
-      const seekSlider = document.getElementById('seek-slider');
+      var seekSlider = document.getElementById('seek-slider');
       seekSlider.disabled = true;
       seekSlider.value    = 0;
       updateSeekDisplay(0, 0);

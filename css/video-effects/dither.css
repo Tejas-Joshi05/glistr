@@ -549,3 +549,96 @@ details[open] .controls-section__header::after { content: '−'; }
   font-variant-numeric: tabular-nums;
   font-size: 0.65rem;
 }
+
+/* ── Mobile layout (≤767px) ──────────────────────────────────────────────── */
+
+/* Desktop: hide the mobile-only controls toggle */
+#btn-controls-mobile { display: none; }
+
+@media (max-width: 767px) {
+  /* Stack sidebar on top, main content below */
+  body { flex-direction: column; }
+
+  /* Sidebar becomes a horizontal tab strip */
+  .sidebar {
+    width: 100%;
+    flex-direction: row;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    height: auto;
+  }
+
+  /* Hide the brand — no room on a phone */
+  .sidebar-brand { display: none; }
+
+  .sidebar-nav {
+    flex-direction: row;
+    width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 0;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .effect-tab {
+    flex: 1;
+    width: auto;
+    text-align: center;
+    padding: 10px 6px;
+    font-size: 0.72rem;
+    border-bottom: 2px solid transparent;
+  }
+
+  .effect-tab.active {
+    border-bottom-color: var(--text);
+    color: var(--text);
+  }
+
+  /* Tab panels stack controls above canvas */
+  .tab-panel { flex-direction: column; }
+
+  /* Controls panel: collapsed by default, full width */
+  .controls-panel {
+    width: 100%;
+    max-height: 0;
+    overflow: hidden;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    transition: max-height 0.25s ease;
+    flex-shrink: 0;
+  }
+
+  .controls-panel.mobile-open {
+    max-height: 45dvh;
+    overflow-y: auto;
+  }
+
+  /* Canvas fills remaining height */
+  .canvas-area { min-height: 120px; }
+
+  /* Zoom overlay: smaller, tucked in corner */
+  .zoom-controls { bottom: 6px; right: 6px; }
+  .zoom-btn { padding: 5px 8px; font-size: 0.68rem; }
+
+  /* Toolbar: tighter, wraps naturally */
+  .shared-toolbar {
+    padding: 6px 8px;
+    gap: 5px;
+    row-gap: 4px;
+  }
+
+  .seek-row { padding-bottom: 6px; }
+
+  /* Bigger tap targets for all buttons */
+  .btn {
+    padding: 7px 10px;
+    font-size: 0.71rem;
+  }
+
+  /* Info text takes no space on mobile */
+  #video-info { display: none; }
+
+  /* Controls toggle: visible on mobile only */
+  #btn-controls-mobile { display: inline-flex; }
+}
