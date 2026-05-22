@@ -5,9 +5,20 @@ window.VideoEffects = window.VideoEffects || {};
 
   const _registry = {};
   let _active    = null;
-  let _realVideo = null;          // always an HTMLVideoElement
+  let _realVideo = null;
   const _shared  = { video: null, hasVideo: false, isImage: false };
   let _isSeeking = false;
+
+  // Zoom / pan state
+  let _zoom      = 1;
+  let _panX      = 0;
+  let _panY      = 0;
+  let _isPanning = false;
+  let _panMouseX = 0;
+  let _panMouseY = 0;
+  const ZOOM_MIN  = 0.1;
+  const ZOOM_MAX  = 8;
+  const ZOOM_STEP = 1.15;
 
   // ── Public API ─────────────────────────────────────────────────────────────
 
@@ -34,7 +45,7 @@ window.VideoEffects = window.VideoEffects || {};
     if (active) {
       const pct = Math.round(progress * 100);
       fill.style.width  = pct + '%';
-      label.textContent = pct < 100 ? 'Exporting\u2026 ' + pct + '%' : 'Finishing\u2026';
+      label.textContent = pct < 100 ? 'Exporting… ' + pct + '%' : 'Finishing…';
     }
   };
 
@@ -53,6 +64,38 @@ window.VideoEffects = window.VideoEffects || {};
     document.getElementById('seek-duration').textContent = formatTime(duration || 0);
   }
 
+  // ── Zoom helpers ───────────────────────────────────────────────────────────
+
+  function getActiveCanvas() {
+    return _active ? document.getElementById(_active + '-canvas') : null;
+  }
+
+  function applyZoomTransform() {
+    const canvas = getActiveCanvas();
+    if (!canvas) return;
+    canvas.style.transformOrigin = 'center center';
+    canvas.style.transform = 'translate(' + _panX + 'px, ' + _panY + 'px) scale(' + _zoom + ')';
+    const el = document.getElementById('zoom-level');
+    if (el) el.textContent = Math.round(_zoom * 100) + '%';
+    updateCursors();
+  }
+
+  function updateCursors() {
+    document.querySelectorAll('.canvas-wrapper').forEach(function (w) {
+      w.style.cursor = _isPanning ? 'grabbing' : (_zoom !== 1 ? 'grab' : 'default');
+    });
+  }
+
+  function zoomBy(factor) {
+    _zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, _zoom * factor));
+    applyZoomTransform();
+  }
+
+  function resetZoom() {
+    _zoom = 1; _panX = 0; _panY = 0;
+    applyZoomTransform();
+  }
+
   // ── DOMContentLoaded ───────────────────────────────────────────────────────
 
   document.addEventListener('DOMContentLoaded', function () {
@@ -62,7 +105,6 @@ window.VideoEffects = window.VideoEffects || {};
     _realVideo.muted       = true;
     _shared.video          = _realVideo;
 
-    // Keep seek slider in sync during playback
     _realVideo.addEventListener('timeupdate', function () {
       if (_shared.isImage || _isSeeking || !_realVideo.duration) return;
       const slider = document.getElementById('seek-slider');
@@ -70,16 +112,16 @@ window.VideoEffects = window.VideoEffects || {};
       updateSeekDisplay(_realVideo.currentTime, _realVideo.duration);
     });
 
-    // Init every registered effect
     for (const [name, def] of Object.entries(_registry)) {
       const canvas   = document.getElementById(name + '-canvas');
       const controls = document.getElementById(name + '-controls');
       if (def.init) def.init(canvas, controls);
     }
 
-    // Tab buttons
     document.querySelectorAll('.effect-tab').forEach(function (tab) {
-      tab.addEventListener('click', function () { switchTo(tab.dataset.tab); });
+      tab.addEventListener('click', function () {
+        if (!tab.disabled) switchTo(tab.dataset.tab);
+      });
     });
 
     const firstTab = document.querySelector('.effect-tab.active');
@@ -88,13 +130,13 @@ window.VideoEffects = window.VideoEffects || {};
       if (_registry[_active] && _registry[_active].activate) _registry[_active].activate();
     }
 
-    // File input — accepts video and image
     document.getElementById('video-input').addEventListener('change', function (e) {
       if (e.target.files[0]) loadMedia(e.target.files[0]);
     });
 
-    // Drag-and-drop on every canvas wrapper
+    // Drag-and-drop + wheel zoom + mouse pan on every canvas wrapper
     document.querySelectorAll('.canvas-wrapper').forEach(function (wrapper) {
+      // Drag-and-drop
       wrapper.addEventListener('dragover', function (e) {
         e.preventDefault();
         wrapper.classList.add('drag-over');
@@ -107,6 +149,37 @@ window.VideoEffects = window.VideoEffects || {};
         wrapper.classList.remove('drag-over');
         const f = e.dataTransfer.files[0];
         if (f) loadMedia(f);
+      });
+
+      // Wheel zoom
+      wrapper.addEventListener('wheel', function (e) {
+        e.preventDefault();
+        zoomBy(e.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP);
+      }, { passive: false });
+
+      // Mouse pan
+      wrapper.addEventListener('mousedown', function (e) {
+        if (e.button !== 0) return;
+        _isPanning = true;
+        _panMouseX = e.clientX;
+        _panMouseY = e.clientY;
+        updateCursors();
+      });
+      wrapper.addEventListener('mousemove', function (e) {
+        if (!_isPanning) return;
+        _panX += e.clientX - _panMouseX;
+        _panY += e.clientY - _panMouseY;
+        _panMouseX = e.clientX;
+        _panMouseY = e.clientY;
+        applyZoomTransform();
+      });
+      wrapper.addEventListener('mouseup', function () {
+        _isPanning = false;
+        updateCursors();
+      });
+      wrapper.addEventListener('mouseleave', function () {
+        _isPanning = false;
+        updateCursors();
       });
     });
 
@@ -130,6 +203,11 @@ window.VideoEffects = window.VideoEffects || {};
         _registry[_active].cancelExport();
       }
     });
+
+    // Zoom buttons
+    document.getElementById('btn-zoom-in').addEventListener('click', function () { zoomBy(ZOOM_STEP); });
+    document.getElementById('btn-zoom-out').addEventListener('click', function () { zoomBy(1 / ZOOM_STEP); });
+    document.getElementById('zoom-level').addEventListener('click', resetZoom);
 
     // Seek slider
     const seekSlider = document.getElementById('seek-slider');
@@ -172,6 +250,8 @@ window.VideoEffects = window.VideoEffects || {};
       !_shared.isImage &&
       !!(_registry[_active] && _registry[_active].exportFullRes)
     );
+
+    applyZoomTransform();
   }
 
   // ── Media loading ──────────────────────────────────────────────────────────
@@ -186,6 +266,10 @@ window.VideoEffects = window.VideoEffects || {};
     if (_realVideo.src) URL.revokeObjectURL(_realVideo.src);
     _realVideo.src = URL.createObjectURL(file);
     _shared.video  = _realVideo;
+
+    // Re-enable Blob Tracker tab for video
+    var blobTab = document.querySelector('.effect-tab[data-tab="blob"]');
+    if (blobTab) blobTab.disabled = false;
 
     _realVideo.onloadedmetadata = function () {
       _shared.hasVideo = true;
@@ -220,17 +304,15 @@ window.VideoEffects = window.VideoEffects || {};
     img.onload = function () {
       URL.revokeObjectURL(url);
 
-      // A canvas mimics a video element as a drawImage-compatible source
       const imgCanvas      = document.createElement('canvas');
       imgCanvas.width      = img.naturalWidth;
       imgCanvas.height     = img.naturalHeight;
       imgCanvas.getContext('2d').drawImage(img, 0, 0);
 
-      // Fake video properties so every effect works without modification
       imgCanvas.videoWidth  = img.naturalWidth;
       imgCanvas.videoHeight = img.naturalHeight;
       imgCanvas.readyState  = 4;
-      imgCanvas.paused      = false;   // treated as "playing" so effects render
+      imgCanvas.paused      = false;
       imgCanvas.currentTime = 0;
       imgCanvas.duration    = 0;
       imgCanvas.play        = function () {};
@@ -239,6 +321,13 @@ window.VideoEffects = window.VideoEffects || {};
       if (!_realVideo.paused) _realVideo.pause();
       _shared.video    = imgCanvas;
       _shared.hasVideo = true;
+
+      // Disable Blob Tracker; switch away if currently on it
+      var blobTab = document.querySelector('.effect-tab[data-tab="blob"]');
+      if (blobTab) {
+        blobTab.disabled = true;
+        if (_active === 'blob') switchTo('dither');
+      }
 
       for (const [, def] of Object.entries(_registry)) {
         if (def.onVideoLoad) def.onVideoLoad(imgCanvas, img.naturalWidth, img.naturalHeight);

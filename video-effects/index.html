@@ -93,6 +93,13 @@
         </div>
       </div>
 
+      <!-- Zoom overlay — floats over the canvas area, bottom-right -->
+      <div class="zoom-controls" id="zoom-controls">
+        <button class="zoom-btn" id="btn-zoom-out">&minus;</button>
+        <button class="zoom-btn zoom-level-btn" id="zoom-level">100%</button>
+        <button class="zoom-btn" id="btn-zoom-in">+</button>
+      </div>
+
       </div><!-- /tab-panels-container -->
 
       <!-- ── Shared toolbar ──────────────────────────────────────────────── -->
@@ -112,10 +119,10 @@
         </div>
         <button class="btn" id="btn-cancel-export" style="display:none">Cancel</button>
 
+        <div class="toolbar-sep"></div>
+
         <button class="btn" id="btn-export-frame">Save Frame</button>
         <button class="btn" id="btn-export-fullres" disabled>Export Video</button>
-
-        <div class="toolbar-sep"></div>
 
         <label class="btn toolbar-upload-label">
           Load

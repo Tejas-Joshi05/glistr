@@ -5,7 +5,7 @@
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  background: var(--bg);
+  background: #1a1a1a;
   border-right: 1px solid var(--border);
   overflow: hidden;
 }
@@ -65,6 +65,8 @@
 
 .effect-tab:hover  { color: var(--text-2); }
 .effect-tab.active { color: var(--text); }
+.effect-tab:disabled        { opacity: 0.3; cursor: not-allowed; }
+.effect-tab:disabled:hover  { color: var(--muted); }
 
 /* ── Main content ─────────────────────────────────────────────────────────── */
 
@@ -83,6 +85,7 @@
   min-height: 0;
   display: flex;
   overflow: hidden;
+  position: relative;
 }
 
 .tab-panel {
@@ -99,7 +102,7 @@
   flex-shrink: 0;
   overflow-y: auto;
   border-right: 1px solid var(--border);
-  background: var(--bg);
+  background: #1a1a1a;
 }
 
 .controls-section {
@@ -210,19 +213,21 @@ details[open] .controls-section__header::after { content: '−'; }
 }
 
 .control__select {
+  -webkit-appearance: none;
+  appearance: none;
   width: 100%;
-  background: var(--surface);
-  border: 1px solid var(--border-2);
+  background: #2a2a2a url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5' viewBox='0 0 8 5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%23666'/%3E%3C/svg%3E") no-repeat right 8px center;
+  border: none;
   border-radius: var(--radius);
   color: var(--text);
   font-family: var(--font);
   font-size: 0.73rem;
-  padding: 5px 8px;
+  padding: 5px 24px 5px 8px;
   cursor: pointer;
   outline: none;
 }
 
-.control__select:focus { border-color: var(--text-2); }
+.control__select:focus { background-color: #333; }
 
 .control__toggle {
   display: flex;
@@ -484,4 +489,44 @@ details[open] .controls-section__header::after { content: '−'; }
   font-size: 0.68rem;
   color: var(--muted);
   white-space: nowrap;
+}
+
+/* ── Zoom controls ────────────────────────────────────────────────────────── */
+
+.zoom-controls {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  background: rgba(14, 14, 14, 0.88);
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius);
+  overflow: hidden;
+  pointer-events: auto;
+}
+
+.zoom-btn {
+  padding: 4px 9px;
+  background: transparent;
+  border: none;
+  color: var(--text-2);
+  font-family: var(--font);
+  font-size: 0.72rem;
+  cursor: pointer;
+  line-height: 1;
+  user-select: none;
+  transition: color 0.1s, background 0.1s;
+}
+
+.zoom-btn:hover { background: var(--surface); color: var(--text); }
+
+.zoom-level-btn {
+  min-width: 40px;
+  text-align: center;
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.65rem;
 }
