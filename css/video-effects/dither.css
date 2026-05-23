@@ -148,6 +148,27 @@ details[open] .controls-section__header::after { content: '−'; }
   margin-bottom: -4px;
 }
 
+.controls-reset-bar {
+  display: flex;
+  gap: 6px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.controls-reset-bar .btn {
+  flex: 1;
+  justify-content: center;
+  font-size: 0.68rem;
+  color: var(--muted);
+  border-color: var(--border);
+}
+
+.controls-reset-bar .btn:hover:not(:disabled) {
+  color: var(--text-2);
+  border-color: var(--border-2);
+}
+
 /* ── Controls ─────────────────────────────────────────────────────────────── */
 
 .control {
