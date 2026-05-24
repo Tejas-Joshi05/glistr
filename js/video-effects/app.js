@@ -127,10 +127,15 @@ window.VideoEffects = window.VideoEffects || {};
     });
 
     for (var name in _registry) {
+      if (!Object.prototype.hasOwnProperty.call(_registry, name)) continue;
       var def      = _registry[name];
       var canvas   = document.getElementById(name + '-canvas');
       var controls = document.getElementById(name + '-controls');
-      if (def.init) def.init(canvas, controls);
+      try {
+        if (def.init) def.init(canvas, controls);
+      } catch (e) {
+        console.error('[VideoEffects] init failed for effect "' + name + '":', e);
+      }
     }
 
     document.querySelectorAll('.effect-tab').forEach(function (tab) {
