@@ -21,6 +21,7 @@
         <button class="effect-tab" data-tab="ascii">ASCII Art</button>
         <button class="effect-tab" data-tab="blob">Blob Tracker</button>
         <button class="effect-tab" data-tab="glitch">Glitch</button>
+        <button class="effect-tab" data-tab="vintage">Vintage</button>
       </nav>
     </aside>
 
@@ -93,6 +94,23 @@
         </div>
       </div>
 
+      <!-- VINTAGE -->
+      <div class="tab-panel" id="panel-vintage" style="display:none">
+        <aside class="controls-panel" id="vintage-controls"></aside>
+        <div class="canvas-area">
+          <div class="canvas-wrapper" id="vintage-wrapper">
+            <div class="drop-overlay" id="vintage-overlay">
+              <div class="drop-overlay__box">
+                <p class="drop-overlay__title">Drop a file here</p>
+                <p class="drop-overlay__sub">or click to browse</p>
+                <p class="drop-overlay__formats">MP4 &middot; MOV &middot; WebM &middot; JPG &middot; PNG</p>
+              </div>
+            </div>
+            <canvas id="vintage-canvas"></canvas>
+          </div>
+        </div>
+      </div>
+
       <!-- Zoom overlay — floats over the canvas area, bottom-right -->
       <div class="zoom-controls" id="zoom-controls">
         <button class="zoom-btn" id="btn-zoom-out">&minus;</button>
@@ -143,6 +161,7 @@
     <script src="../js/video-effects/ascii.js"></script>
     <script src="../js/video-effects/blob-tracker.js"></script>
     <script src="../js/video-effects/glitch.js"></script>
+    <script src="../js/video-effects/vintage.js"></script>
 
   </body>
 </html>
