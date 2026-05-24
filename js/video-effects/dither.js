@@ -5,6 +5,7 @@ window.DitherApp = window.DitherApp || {};
 
   let state = { ...DitherApp.defaultState };
   let controls = null;
+  let _controlsEl = null;
 
   const eng = {
     frameCount:   0,
@@ -97,9 +98,60 @@ window.DitherApp = window.DitherApp || {};
     previewPool.hasPrev = false;
   }
 
+  // ── Controls UI (with reset bar) ───────────────────────────────────────────
+
+  function buildDitherUI(container) {
+    controls = DitherApp.buildControlsPanel(container, state, onControlChange);
+
+    // Prepend reset bar — buildControlsPanel cleared the container, so insert at top
+    const resetBar = document.createElement('div');
+    resetBar.className = 'controls-reset-bar';
+    const resetBtn = document.createElement('button');
+    resetBtn.className = 'btn';
+    resetBtn.textContent = 'Reset to Defaults';
+    resetBtn.addEventListener('click', function () {
+      state = { ...DitherApp.defaultState };
+      buildDitherUI(container);
+      eng.dirty       = true;
+      eng.lastRefresh = -Infinity;
+      previewPool.hasPrev = false;
+    });
+    resetBar.appendChild(resetBtn);
+    container.insertBefore(resetBar, container.firstChild);
+  }
+
   // ── Export ─────────────────────────────────────────────────────────────────
 
   function exportFrame() {
+    const isImg = _video && _video.nodeName === 'CANVAS';
+    if (isImg) {
+      // Full-res render for photos
+      const fw = _video.videoWidth, fh = _video.videoHeight;
+      const expCanvas = document.createElement('canvas');
+      expCanvas.width = fw; expCanvas.height = fh;
+      const expCtx = expCanvas.getContext('2d');
+
+      const srcC = document.createElement('canvas');
+      srcC.width = fw; srcC.height = fh;
+      const srcCtx = srcC.getContext('2d', { willReadFrequently: true });
+      srcCtx.drawImage(_video, 0, 0, fw, fh);
+      const imgData = srcCtx.getImageData(0, 0, fw, fh);
+
+      // Temporarily swap display target so processFrame writes to expCanvas
+      const origDC = displayCanvas, origDCtx = displayCtx;
+      displayCanvas = expCanvas; displayCtx = expCtx;
+      const expEng = { noiseSeed: eng.noiseSeed, frameCount: eng.frameCount };
+      const result = DitherApp.processFrame(imgData, state, expEng, DitherApp.makePool());
+      expCtx.putImageData(result, 0, 0);
+      displayCanvas = origDC; displayCtx = origDCtx;
+
+      const a = document.createElement('a');
+      a.download = 'dither-frame.png';
+      a.href = expCanvas.toDataURL('image/png');
+      a.click();
+      return;
+    }
+
     const out = document.createElement('canvas');
     out.width  = displayCanvas.width;
     out.height = displayCanvas.height;
@@ -214,7 +266,8 @@ window.DitherApp = window.DitherApp || {};
 
       testImageData = buildTestPattern(854, 480);
 
-      controls = DitherApp.buildControlsPanel(controlsEl, state, onControlChange);
+      _controlsEl = controlsEl;
+      buildDitherUI(controlsEl);
     },
 
     onVideoLoad: function (v, vw, vh) {

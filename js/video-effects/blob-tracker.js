@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  let _state = {
+  const DEFAULT_STATE = {
     sensitivity:   25,
     minBlobSize:   1500,
     boxColor:      '#00ff46',
@@ -10,6 +10,9 @@
     mergeRadius:   40,
     connectBoxes:  false,
   };
+
+  let _state = { ...DEFAULT_STATE };
+  let _controlsContainer = null;
 
   let displayCanvas, displayCtx;
   let captureCanvas, captureCtx;
@@ -22,6 +25,21 @@
 
   function buildControls(container) {
     container.innerHTML = '';
+
+    // Reset bar
+    const resetBar = document.createElement('div');
+    resetBar.className = 'controls-reset-bar';
+    const resetBtn = document.createElement('button');
+    resetBtn.className = 'btn';
+    resetBtn.textContent = 'Reset to Defaults';
+    resetBtn.addEventListener('click', function () {
+      _state = { ...DEFAULT_STATE };
+      buildControls(container);
+      prevFrameData = null;
+      dirty = true;
+    });
+    resetBar.appendChild(resetBtn);
+    container.appendChild(resetBar);
 
     const SECTIONS = [
       {
@@ -455,6 +473,7 @@
       captureCanvas.height = 240;
       captureCtx = captureCanvas.getContext('2d', { willReadFrequently: true });
 
+      _controlsContainer = controlsEl;
       drawEmptyState();
       buildControls(controlsEl);
     },
