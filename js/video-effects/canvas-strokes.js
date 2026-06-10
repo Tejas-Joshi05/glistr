@@ -2,9 +2,10 @@
   'use strict';
 
   const DEFAULT_STATE = {
-    density:     0.55,   // 0.1–1: stroke count / bristle count
-    contrast:    0.60,   // 0–1:   saturation + contrast boost
-    edgeSpread:  0.30,   // 0–1:   how far bristles extend beyond the stroke body
+    strokeType:  'block',  // 'block' | 'flat' | 'rough' | 'liner'
+    density:     0.55,
+    contrast:    0.60,
+    edgeSpread:  0.30,
   };
 
   let _state = { ...DEFAULT_STATE };
@@ -72,80 +73,68 @@
     return Math.atan2(gx, -gy);
   }
 
-  // ── Draw one brush stroke: filled body + ragged edge/end bristles ─────────
-  //
-  // Matches the reference: solid painted center, jagged top/bottom edges,
-  // bristle fibers fanning out from sides and ends.
+  // ── Shared: build outline edge arrays ─────────────────────────────────────
 
-  function drawStroke(ctx, cx, cy, angle, length, width, r, g, b, edgeSpread) {
-    const cos  = Math.cos(angle);
-    const sin  = Math.sin(angle);
-    const px   = -sin;        // perpendicular
-    const py   =  cos;
-    const halfLen = length / 2;
-    const halfW   = width  / 2;
-    const N = 28;             // edge resolution
-
-    // ── 1. Build ragged outline ────────────────────────────────────────────
+  function buildOutline(cx, cy, cos, sin, px, py, length, halfW, taperExp, noiseScale, N) {
     const top = [], bot = [];
     for (let i = 0; i <= N; i++) {
       const t     = i / N;
       const along = (t - 0.5) * length;
-      // Slightly squarish taper so the body looks painted on
-      const taper = Math.pow(Math.sin(t * Math.PI), 0.55);
-      const noise = (Math.random() - 0.5) * halfW * 0.38;
+      const taper = Math.pow(Math.sin(t * Math.PI), taperExp);
+      const noise = (Math.random() - 0.5) * halfW * noiseScale;
       const hw    = halfW * taper + noise;
       const bx    = cx + cos * along;
       const by    = cy + sin * along;
-      top.push({ x: bx + px * hw,  y: by + py * hw });
-      bot.push({ x: bx - px * hw,  y: by - py * hw });
+      top.push({ x: bx + px * hw, y: by + py * hw });
+      bot.push({ x: bx - px * hw, y: by - py * hw });
     }
+    return { top, bot };
+  }
 
-    // ── 2. Fill solid body ─────────────────────────────────────────────────
+  function fillOutline(ctx, top, bot, r, g, b, alpha) {
     ctx.beginPath();
     ctx.moveTo(top[0].x, top[0].y);
     for (const p of top) ctx.lineTo(p.x, p.y);
     for (let i = bot.length - 1; i >= 0; i--) ctx.lineTo(bot[i].x, bot[i].y);
     ctx.closePath();
-    ctx.fillStyle = `rgba(${r|0},${g|0},${b|0},0.84)`;
+    ctx.fillStyle = `rgba(${r|0},${g|0},${b|0},${alpha})`;
     ctx.fill();
+  }
 
-    // ── 3. Side bristles (top & bottom edges) ─────────────────────────────
+  function drawSideBristles(ctx, cx, cy, cos, sin, px, py, length, halfW, taperExp, edgeSpread, maxLen, count, r, g, b) {
     ctx.setLineDash([]);
     ctx.lineCap = 'round';
-    const numSide = 16 + Math.round(length / 5);
-    for (let i = 0; i < numSide; i++) {
-      const t     = Math.random();
-      const along = (t - 0.5) * length;
-      const taper = Math.pow(Math.sin(t * Math.PI), 0.55);
-      const hw    = halfW * taper;
-      const bx    = cx + cos * along;
-      const by    = cy + sin * along;
-      const side  = Math.random() > 0.5 ? 1 : -1;
-      const bLen  = edgeSpread * (3 + Math.random() * halfW * 0.6);
-      const skew  = (Math.random() - 0.5) * 7;
-      const alpha = (0.2 + Math.random() * 0.55).toFixed(2);
-      ctx.strokeStyle = `rgba(${r|0},${g|0},${b|0},${alpha})`;
-      ctx.lineWidth   = 0.6 + Math.random() * 2.0;
+    for (let i = 0; i < count; i++) {
+      const t    = Math.random();
+      const hw   = halfW * Math.pow(Math.sin(t * Math.PI), taperExp);
+      const bx   = cx + cos * ((t - 0.5) * length);
+      const by   = cy + sin * ((t - 0.5) * length);
+      const side = Math.random() > 0.5 ? 1 : -1;
+      const bLen = edgeSpread * (2 + Math.random() * maxLen);
+      const skew = (Math.random() - 0.5) * 8;
+      const a    = (0.18 + Math.random() * 0.52).toFixed(2);
+      ctx.strokeStyle = `rgba(${r|0},${g|0},${b|0},${a})`;
+      ctx.lineWidth   = 0.5 + Math.random() * 2.0;
       ctx.beginPath();
-      ctx.moveTo(bx + px * side * hw,            by + py * side * hw);
+      ctx.moveTo(bx + px * side * hw,                  by + py * side * hw);
       ctx.lineTo(bx + px * side * (hw + bLen) + cos * skew,
                  by + py * side * (hw + bLen) + sin * skew);
       ctx.stroke();
     }
+  }
 
-    // ── 4. End bristles (fan out from both tapered ends) ──────────────────
+  function drawEndBristles(ctx, cx, cy, cos, sin, px, py, halfLen, width, edgeSpread, maxLen, count, r, g, b) {
+    ctx.lineCap = 'round';
     for (let ei = 0; ei < 2; ei++) {
       const dir = ei === 0 ? -1 : 1;
       const ex  = cx + cos * halfLen * dir;
       const ey  = cy + sin * halfLen * dir;
-      const numEnd = 12 + Math.round(halfW / 2.5);
-      for (let i = 0; i < numEnd; i++) {
-        const fan   = (Math.random() - 0.5) * width * 1.15;
-        const bLen  = edgeSpread * (5 + Math.random() * halfW * 1.1);
-        const skew  = (Math.random() - 0.5) * halfW * 0.28;
-        const alpha = (0.18 + Math.random() * 0.62).toFixed(2);
-        ctx.strokeStyle = `rgba(${r|0},${g|0},${b|0},${alpha})`;
+      for (let i = 0; i < count; i++) {
+        const fan  = (Math.random() - 0.5) * width * 1.1;
+        const bLen = edgeSpread * (4 + Math.random() * maxLen);
+        const skew = (Math.random() - 0.5) * width * 0.25;
+        const a    = (0.18 + Math.random() * 0.58).toFixed(2);
+        ctx.strokeStyle = `rgba(${r|0},${g|0},${b|0},${a})`;
         ctx.lineWidth   = 0.5 + Math.random() * 1.8;
         ctx.beginPath();
         ctx.moveTo(ex + px * fan,                       ey + py * fan);
@@ -156,50 +145,151 @@
     }
   }
 
+  // ── Stroke type: Block ─────────────────────────────────────────────────────
+  // Original style — jagged filled body, ragged side + end bristles.
+
+  function drawStrokeBlock(ctx, cx, cy, angle, length, width, r, g, b, edgeSpread) {
+    const cos = Math.cos(angle), sin = Math.sin(angle);
+    const px = -sin, py = cos;
+    const halfLen = length / 2, halfW = width / 2;
+    const { top, bot } = buildOutline(cx, cy, cos, sin, px, py, length, halfW, 0.55, 0.38, 28);
+    fillOutline(ctx, top, bot, r, g, b, 0.84);
+    drawSideBristles(ctx, cx, cy, cos, sin, px, py, length, halfW, 0.55, edgeSpread, halfW * 0.6,  16 + Math.round(length / 5), r, g, b);
+    drawEndBristles (ctx, cx, cy, cos, sin, px, py, halfLen, width, edgeSpread, halfW * 1.1, 12 + Math.round(halfW / 2.5), r, g, b);
+  }
+
+  // ── Stroke type: Flat ──────────────────────────────────────────────────────
+  // Smooth flat-brush feel — lighter parallel streaks inside body, soft edges.
+
+  function drawStrokeFlat(ctx, cx, cy, angle, length, width, r, g, b, edgeSpread) {
+    const cos = Math.cos(angle), sin = Math.sin(angle);
+    const px = -sin, py = cos;
+    const halfLen = length / 2, halfW = width / 2;
+    const { top, bot } = buildOutline(cx, cy, cos, sin, px, py, length, halfW, 0.65, 0.20, 24);
+    fillOutline(ctx, top, bot, r, g, b, 0.78);
+
+    // Internal parallel bristle streaks (lighter, low alpha)
+    const lr = Math.min(255, r + 50) | 0;
+    const lg = Math.min(255, g + 50) | 0;
+    const lb = Math.min(255, b + 50) | 0;
+    const numLines = 6 + Math.round(width / 3.5);
+    ctx.setLineDash([]); ctx.lineCap = 'round';
+    for (let i = 0; i < numLines; i++) {
+      const tOff   = (i / (numLines - 1) - 0.5);
+      const offset = tOff * width * 0.80;
+      const a      = (0.07 + Math.random() * 0.18).toFixed(2);
+      ctx.strokeStyle = `rgba(${lr},${lg},${lb},${a})`;
+      ctx.lineWidth   = 0.8 + Math.random() * 2.8;
+      const jitter = (Math.random() - 0.5) * 3;
+      ctx.beginPath();
+      ctx.moveTo(cx + px * (offset + jitter) + cos * (-halfLen + Math.random() * length * 0.05),
+                 cy + py * (offset + jitter) + sin * (-halfLen + Math.random() * length * 0.05));
+      ctx.lineTo(cx + px * (offset + jitter) + cos * ( halfLen - Math.random() * length * 0.05),
+                 cy + py * (offset + jitter) + sin * ( halfLen - Math.random() * length * 0.05));
+      ctx.stroke();
+    }
+    drawSideBristles(ctx, cx, cy, cos, sin, px, py, length, halfW, 0.65, edgeSpread, halfW * 0.45, 10 + Math.round(length / 7), r, g, b);
+    drawEndBristles (ctx, cx, cy, cos, sin, px, py, halfLen, width, edgeSpread, halfW * 0.9,  8  + Math.round(halfW / 3),   r, g, b);
+  }
+
+  // ── Stroke type: Rough ─────────────────────────────────────────────────────
+  // Wide, heavily textured dry brush — grain inside, very ragged edges.
+
+  function drawStrokeRough(ctx, cx, cy, angle, length, width, r, g, b, edgeSpread) {
+    const cos = Math.cos(angle), sin = Math.sin(angle);
+    const px = -sin, py = cos;
+    const halfLen = length / 2;
+    const halfW   = width / 2 * 1.40;   // wider body
+    const { top, bot } = buildOutline(cx, cy, cos, sin, px, py, length, halfW, 0.38, 0.46, 32);
+    fillOutline(ctx, top, bot, r, g, b, 0.80);
+
+    // Internal grain — many short horizontal marks
+    const grainCount = 50 + Math.round((length * halfW * 2) / 35);
+    const lightness  = Math.min(255, (r + g + b) / 3 + 60) | 0;
+    ctx.lineCap = 'butt';
+    for (let i = 0; i < grainCount; i++) {
+      const t      = Math.random();
+      const along  = (t - 0.5) * length * 0.92;
+      const taper  = Math.pow(Math.sin(t * Math.PI), 0.38);
+      const perpOff = (Math.random() - 0.5) * halfW * taper * 1.85;
+      const gx     = cx + cos * along + px * perpOff;
+      const gy     = cy + sin * along + py * perpOff;
+      const gLen   = 4 + Math.random() * 28;
+      const a      = (0.04 + Math.random() * 0.13).toFixed(2);
+      ctx.strokeStyle = `rgba(${lightness},${lightness},${lightness},${a})`;
+      ctx.lineWidth   = 0.4 + Math.random() * 2.4;
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.moveTo(gx, gy);
+      ctx.lineTo(gx + cos * gLen, gy + sin * gLen);
+      ctx.stroke();
+    }
+    ctx.lineCap = 'round';
+    drawSideBristles(ctx, cx, cy, cos, sin, px, py, length, halfW, 0.38, edgeSpread, halfW * 0.85, 22 + Math.round(length / 4), r, g, b);
+    drawEndBristles (ctx, cx, cy, cos, sin, px, py, halfLen, halfW * 2, edgeSpread, halfW * 1.3, 20 + Math.round(halfW / 2), r, g, b);
+  }
+
+  // ── Stroke type: Liner ─────────────────────────────────────────────────────
+  // Thin, sharply tapered calligraphy-like stroke, minimal edge spread.
+
+  function drawStrokeLiner(ctx, cx, cy, angle, length, width, r, g, b, edgeSpread) {
+    const cos = Math.cos(angle), sin = Math.sin(angle);
+    const px = -sin, py = cos;
+    const halfLen = length / 2;
+    const halfW   = width / 2 * 0.30;   // much narrower
+    const { top, bot } = buildOutline(cx, cy, cos, sin, px, py, length, halfW, 2.0, 0.16, 20);
+    fillOutline(ctx, top, bot, r, g, b, 0.92);
+    drawSideBristles(ctx, cx, cy, cos, sin, px, py, length, halfW, 2.0, edgeSpread, halfW * 0.55, 4 + Math.round(length / 12), r, g, b);
+    // No end fan — liner tapers to a clean point
+  }
+
+  // ── Dispatcher ─────────────────────────────────────────────────────────────
+
+  function drawStroke(ctx, cx, cy, angle, length, width, r, g, b, edgeSpread) {
+    switch (_state.strokeType) {
+      case 'flat':  return drawStrokeFlat  (ctx, cx, cy, angle, length, width, r, g, b, edgeSpread);
+      case 'rough': return drawStrokeRough (ctx, cx, cy, angle, length, width, r, g, b, edgeSpread);
+      case 'liner': return drawStrokeLiner (ctx, cx, cy, angle, length, width, r, g, b, edgeSpread);
+      default:      return drawStrokeBlock (ctx, cx, cy, angle, length, width, r, g, b, edgeSpread);
+    }
+  }
+
   // ── Core renderer ──────────────────────────────────────────────────────────
 
   function renderCanvasStrokes(v, dCtx, dCanvas, wCanvas, wCtx) {
     const w = dCanvas.width, h = dCanvas.height;
 
-    // 1. Draw source into work canvas
     wCtx.clearRect(0, 0, w, h);
     wCtx.drawImage(v, 0, 0, w, h);
 
-    // 2. Contrast-boost the work canvas pixels for both sampling and base
     const imgData = wCtx.getImageData(0, 0, w, h);
     if (_state.contrast > 0.02) {
       applyContrast(imgData.data, _state.contrast);
       wCtx.putImageData(imgData, 0, 0);
     }
-    const px = imgData.data;  // sample buffer (contrast-boosted)
+    const px = imgData.data;
 
-    // 3. Full original image as base — strokes are drawn on top as overlay
     dCtx.clearRect(0, 0, w, h);
     dCtx.drawImage(v, 0, 0, w, h);
 
-    // 4. Place brush strokes on a jittered grid
     dCtx.lineCap = 'round';
 
     const density   = _state.density;
-    const gridStep  = Math.max(10, Math.round(32 - density * 18));  // 14–32 px
+    const gridStep  = Math.max(10, Math.round(32 - density * 18));
     const baseLen   = gridStep * 4.5;
     const baseWidth = gridStep * 1.9;
 
     for (let y = 0; y < h + gridStep; y += gridStep) {
       for (let x = 0; x < w + gridStep; x += gridStep) {
-        // Jitter position within the grid cell
         const jx = Math.max(0, Math.min(w - 1, x + (Math.random() - 0.5) * gridStep * 0.75));
         const jy = Math.max(0, Math.min(h - 1, y + (Math.random() - 0.5) * gridStep * 0.75));
 
-        // Sample color from the contrast-boosted frame
-        const si = ((jy | 0) * w + (jx | 0)) * 4;
-        const sr = px[si], sg = px[si+1], sb = px[si+2];
+        const si  = ((jy | 0) * w + (jx | 0)) * 4;
+        const sr  = px[si], sg = px[si+1], sb = px[si+2];
 
-        // Slight per-stroke size variation
         const sLen = baseLen   * (0.72 + Math.random() * 0.56);
         const sWid = baseWidth * (0.68 + Math.random() * 0.64);
 
-        // Stroke angle follows local edge direction + small random nudge
         const angle = flowAngleAt(px, w, h, jx | 0, jy | 0) + (Math.random() - 0.5) * 0.4;
 
         drawStroke(dCtx, jx, jy, angle, sLen, sWid, sr, sg, sb, _state.edgeSpread);
@@ -225,6 +315,20 @@
   // ── Controls ───────────────────────────────────────────────────────────────
 
   const SECTIONS = [
+    {
+      title: 'STYLE',
+      specs: [
+        {
+          key: 'strokeType', label: 'Brush Type', type: 'toggle',
+          options: [
+            { value: 'block', label: 'Block' },
+            { value: 'flat',  label: 'Flat'  },
+            { value: 'rough', label: 'Rough' },
+            { value: 'liner', label: 'Liner' },
+          ],
+        },
+      ],
+    },
     {
       title: 'BRUSH',
       specs: [
@@ -258,7 +362,7 @@
   ];
 
   function buildControl(spec) {
-    const wrap  = document.createElement('div');
+    const wrap = document.createElement('div');
     wrap.className = 'control';
 
     const label = document.createElement('span');
@@ -266,7 +370,26 @@
     label.textContent = spec.label;
     wrap.appendChild(label);
 
-    const row   = document.createElement('div');
+    if (spec.type === 'toggle') {
+      const row = document.createElement('div');
+      row.className = 'control__toggle';
+      for (const opt of spec.options) {
+        const btn = document.createElement('button');
+        btn.className = 'toggle-btn' + (_state[spec.key] === opt.value ? ' active' : '');
+        btn.textContent = opt.label;
+        btn.addEventListener('click', function () {
+          _state = { ..._state, [spec.key]: opt.value };
+          row.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          dirty = true;
+        });
+        row.appendChild(btn);
+      }
+      wrap.appendChild(row);
+      return wrap;
+    }
+
+    const row  = document.createElement('div');
     row.className = 'control__row';
 
     const input = document.createElement('input');
@@ -277,8 +400,8 @@
     input.value     = _state[spec.key];
     input.className = 'control__slider';
 
-    const disp  = document.createElement('span');
-    disp.className = 'control__value';
+    const disp = document.createElement('span');
+    disp.className   = 'control__value';
     disp.textContent = spec.fmt(_state[spec.key]);
 
     input.addEventListener('input', function () {
@@ -300,7 +423,7 @@
     const resetBar = document.createElement('div');
     resetBar.className = 'controls-reset-bar';
     const resetBtn = document.createElement('button');
-    resetBtn.className = 'btn';
+    resetBtn.className   = 'btn';
     resetBtn.textContent = 'Reset to Defaults';
     resetBtn.addEventListener('click', function () {
       _state = { ...DEFAULT_STATE };
