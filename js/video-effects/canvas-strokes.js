@@ -472,9 +472,18 @@
       a.click();
       return;
     }
+    // Video case — re-render at native resolution for full-quality frame
+    const fw = _video.videoWidth, fh = _video.videoHeight;
+    const expC    = document.createElement('canvas');
+    expC.width = fw; expC.height = fh;
+    const expCtx  = expC.getContext('2d');
+    const expW    = document.createElement('canvas');
+    expW.width = fw; expW.height = fh;
+    const expWCtx = expW.getContext('2d', { willReadFrequently: true });
+    renderCanvasStrokes(_video, expCtx, expC, expW, expWCtx);
     const a = document.createElement('a');
     a.download = 'canvas-strokes.png';
-    a.href = displayCanvas.toDataURL('image/png');
+    a.href = expC.toDataURL('image/png');
     a.click();
   }
 
@@ -493,7 +502,7 @@
     _exporting = true; _cancelExport = false;
 
     const vw = _video.videoWidth, vh = _video.videoHeight;
-    const [ew, eh] = previewSize(vw, vh);
+    const ew = vw, eh = vh;  // export at native resolution
     const expC    = document.createElement('canvas');
     expC.width = ew; expC.height = eh;
     const expCtx  = expC.getContext('2d');
