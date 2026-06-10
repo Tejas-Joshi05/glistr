@@ -6,9 +6,20 @@
     density:     0.55,
     contrast:    0.60,
     edgeSpread:  0.30,
+    seed:        12345,
   };
 
   let _state = { ...DEFAULT_STATE };
+
+  // Seeded PRNG (deterministic per render so the pattern is reproducible)
+  function _makePrng(seed) {
+    let s = (seed | 0) || 1;
+    return function () {
+      s = Math.imul(s ^ s >>> 15, s | 1) ^ Math.imul(s ^ s >>> 7, s | 61);
+      return ((s ^ s >>> 14) >>> 0) / 4294967296;
+    };
+  }
+  let _rng = Math.random;
 
   let displayCanvas, displayCtx;
   let workCanvas, workCtx;
@@ -81,7 +92,7 @@
       const t     = i / N;
       const along = (t - 0.5) * length;
       const taper = Math.pow(Math.sin(t * Math.PI), taperExp);
-      const noise = (Math.random() - 0.5) * halfW * noiseScale;
+      const noise = (_rng() - 0.5) * halfW * noiseScale;
       const hw    = halfW * taper + noise;
       const bx    = cx + cos * along;
       const by    = cy + sin * along;
@@ -105,16 +116,16 @@
     ctx.setLineDash([]);
     ctx.lineCap = 'round';
     for (let i = 0; i < count; i++) {
-      const t    = Math.random();
+      const t    = _rng();
       const hw   = halfW * Math.pow(Math.sin(t * Math.PI), taperExp);
       const bx   = cx + cos * ((t - 0.5) * length);
       const by   = cy + sin * ((t - 0.5) * length);
-      const side = Math.random() > 0.5 ? 1 : -1;
-      const bLen = edgeSpread * (2 + Math.random() * maxLen);
-      const skew = (Math.random() - 0.5) * 8;
-      const a    = (0.18 + Math.random() * 0.52).toFixed(2);
+      const side = _rng() > 0.5 ? 1 : -1;
+      const bLen = edgeSpread * (2 + _rng() * maxLen);
+      const skew = (_rng() - 0.5) * 8;
+      const a    = (0.18 + _rng() * 0.52).toFixed(2);
       ctx.strokeStyle = `rgba(${r|0},${g|0},${b|0},${a})`;
-      ctx.lineWidth   = 0.5 + Math.random() * 2.0;
+      ctx.lineWidth   = 0.5 + _rng() * 2.0;
       ctx.beginPath();
       ctx.moveTo(bx + px * side * hw,                  by + py * side * hw);
       ctx.lineTo(bx + px * side * (hw + bLen) + cos * skew,
@@ -130,12 +141,12 @@
       const ex  = cx + cos * halfLen * dir;
       const ey  = cy + sin * halfLen * dir;
       for (let i = 0; i < count; i++) {
-        const fan  = (Math.random() - 0.5) * width * 1.1;
-        const bLen = edgeSpread * (4 + Math.random() * maxLen);
-        const skew = (Math.random() - 0.5) * width * 0.25;
-        const a    = (0.18 + Math.random() * 0.58).toFixed(2);
+        const fan  = (_rng() - 0.5) * width * 1.1;
+        const bLen = edgeSpread * (4 + _rng() * maxLen);
+        const skew = (_rng() - 0.5) * width * 0.25;
+        const a    = (0.18 + _rng() * 0.58).toFixed(2);
         ctx.strokeStyle = `rgba(${r|0},${g|0},${b|0},${a})`;
-        ctx.lineWidth   = 0.5 + Math.random() * 1.8;
+        ctx.lineWidth   = 0.5 + _rng() * 1.8;
         ctx.beginPath();
         ctx.moveTo(ex + px * fan,                       ey + py * fan);
         ctx.lineTo(ex + px * (fan + skew) + cos * dir * bLen,
@@ -177,15 +188,15 @@
     for (let i = 0; i < numLines; i++) {
       const tOff   = (i / (numLines - 1) - 0.5);
       const offset = tOff * width * 0.80;
-      const a      = (0.07 + Math.random() * 0.18).toFixed(2);
+      const a      = (0.07 + _rng() * 0.18).toFixed(2);
       ctx.strokeStyle = `rgba(${lr},${lg},${lb},${a})`;
-      ctx.lineWidth   = 0.8 + Math.random() * 2.8;
-      const jitter = (Math.random() - 0.5) * 3;
+      ctx.lineWidth   = 0.8 + _rng() * 2.8;
+      const jitter = (_rng() - 0.5) * 3;
       ctx.beginPath();
-      ctx.moveTo(cx + px * (offset + jitter) + cos * (-halfLen + Math.random() * length * 0.05),
-                 cy + py * (offset + jitter) + sin * (-halfLen + Math.random() * length * 0.05));
-      ctx.lineTo(cx + px * (offset + jitter) + cos * ( halfLen - Math.random() * length * 0.05),
-                 cy + py * (offset + jitter) + sin * ( halfLen - Math.random() * length * 0.05));
+      ctx.moveTo(cx + px * (offset + jitter) + cos * (-halfLen + _rng() * length * 0.05),
+                 cy + py * (offset + jitter) + sin * (-halfLen + _rng() * length * 0.05));
+      ctx.lineTo(cx + px * (offset + jitter) + cos * ( halfLen - _rng() * length * 0.05),
+                 cy + py * (offset + jitter) + sin * ( halfLen - _rng() * length * 0.05));
       ctx.stroke();
     }
     drawSideBristles(ctx, cx, cy, cos, sin, px, py, length, halfW, 0.65, edgeSpread, halfW * 0.45, 10 + Math.round(length / 7), r, g, b);
@@ -208,16 +219,16 @@
     const lightness  = Math.min(255, (r + g + b) / 3 + 60) | 0;
     ctx.lineCap = 'butt';
     for (let i = 0; i < grainCount; i++) {
-      const t      = Math.random();
+      const t      = _rng();
       const along  = (t - 0.5) * length * 0.92;
       const taper  = Math.pow(Math.sin(t * Math.PI), 0.38);
-      const perpOff = (Math.random() - 0.5) * halfW * taper * 1.85;
+      const perpOff = (_rng() - 0.5) * halfW * taper * 1.85;
       const gx     = cx + cos * along + px * perpOff;
       const gy     = cy + sin * along + py * perpOff;
-      const gLen   = 4 + Math.random() * 28;
-      const a      = (0.04 + Math.random() * 0.13).toFixed(2);
+      const gLen   = 4 + _rng() * 28;
+      const a      = (0.04 + _rng() * 0.13).toFixed(2);
       ctx.strokeStyle = `rgba(${lightness},${lightness},${lightness},${a})`;
-      ctx.lineWidth   = 0.4 + Math.random() * 2.4;
+      ctx.lineWidth   = 0.4 + _rng() * 2.4;
       ctx.setLineDash([]);
       ctx.beginPath();
       ctx.moveTo(gx, gy);
@@ -258,6 +269,7 @@
 
   function renderCanvasStrokes(v, dCtx, dCanvas, wCanvas, wCtx) {
     const w = dCanvas.width, h = dCanvas.height;
+    _rng = _makePrng(_state.seed);  // reset so pattern is consistent per seed
 
     wCtx.clearRect(0, 0, w, h);
     wCtx.drawImage(v, 0, 0, w, h);
@@ -275,22 +287,22 @@
     dCtx.lineCap = 'round';
 
     const density   = _state.density;
-    const gridStep  = Math.max(10, Math.round(32 - density * 18));
+    const gridStep  = Math.max(5, Math.round(32 - density * 22));   // lower floor = finer strokes at high density
     const baseLen   = gridStep * 4.5;
     const baseWidth = gridStep * 1.9;
 
     for (let y = 0; y < h + gridStep; y += gridStep) {
       for (let x = 0; x < w + gridStep; x += gridStep) {
-        const jx = Math.max(0, Math.min(w - 1, x + (Math.random() - 0.5) * gridStep * 0.75));
-        const jy = Math.max(0, Math.min(h - 1, y + (Math.random() - 0.5) * gridStep * 0.75));
+        const jx = Math.max(0, Math.min(w - 1, x + (_rng() - 0.5) * gridStep * 0.75));
+        const jy = Math.max(0, Math.min(h - 1, y + (_rng() - 0.5) * gridStep * 0.75));
 
         const si  = ((jy | 0) * w + (jx | 0)) * 4;
         const sr  = px[si], sg = px[si+1], sb = px[si+2];
 
-        const sLen = baseLen   * (0.72 + Math.random() * 0.56);
-        const sWid = baseWidth * (0.68 + Math.random() * 0.64);
+        const sLen = baseLen   * (0.72 + _rng() * 0.56);
+        const sWid = baseWidth * (0.68 + _rng() * 0.64);
 
-        const angle = flowAngleAt(px, w, h, jx | 0, jy | 0) + (Math.random() - 0.5) * 0.4;
+        const angle = flowAngleAt(px, w, h, jx | 0, jy | 0) + (_rng() - 0.5) * 0.4;
 
         drawStroke(dCtx, jx, jy, angle, sLen, sWid, sr, sg, sb, _state.edgeSpread);
       }
@@ -350,6 +362,12 @@
       ],
     },
     {
+      title: 'SEED',
+      specs: [
+        { key: 'seed', label: 'Pattern Seed', type: 'seed' },
+      ],
+    },
+    {
       title: 'COLOR',
       specs: [
         {
@@ -369,6 +387,37 @@
     label.className = 'control__label';
     label.textContent = spec.label;
     wrap.appendChild(label);
+
+    if (spec.type === 'seed') {
+      const row = document.createElement('div');
+      row.className = 'control__row';
+      const input = document.createElement('input');
+      input.type      = 'number';
+      input.min       = 1;
+      input.max       = 9999999;
+      input.value     = _state.seed;
+      input.className = 'control__text';
+      input.style.cssText = 'width:72px;flex:none;';
+      input.addEventListener('change', function () {
+        const v = Math.max(1, parseInt(input.value) || 1);
+        input.value = v;
+        _state = { ..._state, seed: v };
+        dirty = true;
+      });
+      const btn = document.createElement('button');
+      btn.className   = 'btn';
+      btn.textContent = 'New';
+      btn.addEventListener('click', function () {
+        const v = Math.floor(Math.random() * 999998) + 1;
+        _state = { ..._state, seed: v };
+        input.value = v;
+        dirty = true;
+      });
+      row.appendChild(input);
+      row.appendChild(btn);
+      wrap.appendChild(row);
+      return wrap;
+    }
 
     if (spec.type === 'toggle') {
       const row = document.createElement('div');
