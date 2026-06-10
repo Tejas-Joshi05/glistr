@@ -358,7 +358,9 @@ details[open] .controls-section__header::after { content: '−'; }
 #dither-canvas,
 #ascii-canvas,
 #blob-canvas,
-#glitch-canvas {
+#glitch-canvas,
+#vintage-canvas,
+#canvas-strokes-canvas {
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
