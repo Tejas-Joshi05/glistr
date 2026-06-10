@@ -5,6 +5,7 @@
     strokeType:  'block',  // 'block' | 'flat' | 'rough' | 'liner'
     randomDir:   true,    // true = follow image edges, false = use fixed angle
     strokeAngle: 0,       // degrees 0–180 (used when randomDir is false)
+    angleJitter: 0.25,    // 0 = all parallel, 1 = fully random direction
     density:     0.55,
     contrast:    0.60,
     edgeSpread:  0.30,
@@ -32,14 +33,13 @@
   let dirty     = true;
   let _exporting = false, _cancelExport = false;
 
-  const PREVIEW_MAX_H = 480;
-
   // ── Sizing ─────────────────────────────────────────────────────────────────
 
   function previewSize(vw, vh) {
-    if (vh <= PREVIEW_MAX_H) return [vw, vh];
-    const s = PREVIEW_MAX_H / vh;
-    return [Math.round(vw * s), PREVIEW_MAX_H];
+    const cap = VideoEffects.hiRes ? Infinity : 480;
+    if (vh <= cap) return [vw, vh];
+    const s = cap / vh;
+    return [Math.round(vw * s), cap];
   }
 
   function setupCanvases(vw, vh) {
@@ -309,7 +309,7 @@
         const baseAngle = _state.randomDir
           ? flowAngleAt(px, w, h, jx | 0, jy | 0)
           : (_state.strokeAngle * Math.PI / 180);
-        const angle = baseAngle + (_rng() - 0.5) * 0.4;
+        const angle = baseAngle + (_rng() - 0.5) * _state.angleJitter * Math.PI;
 
         drawStroke(dCtx, jx, jy, angle, sLen, sWid, sr, sg, sb, _state.edgeSpread);
       }
@@ -362,6 +362,11 @@
           key: 'strokeAngle', label: 'Stroke Angle', type: 'slider',
           min: 0, max: 180, step: 1,
           fmt: v => v + '°',
+        },
+        {
+          key: 'angleJitter', label: 'Direction Variance', type: 'slider',
+          min: 0, max: 1, step: 0.01,
+          fmt: v => v < 0.05 ? 'Locked' : v < 0.25 ? 'Slight' : v < 0.6 ? 'Varied' : 'Random',
         },
       ],
     },
