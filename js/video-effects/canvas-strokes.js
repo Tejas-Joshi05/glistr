@@ -3,6 +3,8 @@
 
   const DEFAULT_STATE = {
     strokeType:  'block',  // 'block' | 'flat' | 'rough' | 'liner'
+    randomDir:   true,    // true = follow image edges, false = use fixed angle
+    strokeAngle: 0,       // degrees 0–180 (used when randomDir is false)
     density:     0.55,
     contrast:    0.60,
     edgeSpread:  0.30,
@@ -20,6 +22,7 @@
     };
   }
   let _rng = Math.random;
+  let _scale = 1;  // set per render: canvasHeight / 480
 
   let displayCanvas, displayCtx;
   let workCanvas, workCtx;
@@ -122,10 +125,10 @@
       const by   = cy + sin * ((t - 0.5) * length);
       const side = _rng() > 0.5 ? 1 : -1;
       const bLen = edgeSpread * (2 + _rng() * maxLen);
-      const skew = (_rng() - 0.5) * 8;
+      const skew = (_rng() - 0.5) * 8 * _scale;
       const a    = (0.18 + _rng() * 0.52).toFixed(2);
       ctx.strokeStyle = `rgba(${r|0},${g|0},${b|0},${a})`;
-      ctx.lineWidth   = 0.5 + _rng() * 2.0;
+      ctx.lineWidth   = (0.5 + _rng() * 2.0) * _scale;
       ctx.beginPath();
       ctx.moveTo(bx + px * side * hw,                  by + py * side * hw);
       ctx.lineTo(bx + px * side * (hw + bLen) + cos * skew,
@@ -191,7 +194,7 @@
       const a      = (0.07 + _rng() * 0.18).toFixed(2);
       ctx.strokeStyle = `rgba(${lr},${lg},${lb},${a})`;
       ctx.lineWidth   = 0.8 + _rng() * 2.8;
-      const jitter = (_rng() - 0.5) * 3;
+      const jitter = (_rng() - 0.5) * 3 * _scale;
       ctx.beginPath();
       ctx.moveTo(cx + px * (offset + jitter) + cos * (-halfLen + _rng() * length * 0.05),
                  cy + py * (offset + jitter) + sin * (-halfLen + _rng() * length * 0.05));
@@ -225,7 +228,7 @@
       const perpOff = (_rng() - 0.5) * halfW * taper * 1.85;
       const gx     = cx + cos * along + px * perpOff;
       const gy     = cy + sin * along + py * perpOff;
-      const gLen   = 4 + _rng() * 28;
+      const gLen   = (4 + _rng() * 28) * _scale;
       const a      = (0.04 + _rng() * 0.13).toFixed(2);
       ctx.strokeStyle = `rgba(${lightness},${lightness},${lightness},${a})`;
       ctx.lineWidth   = 0.4 + _rng() * 2.4;
@@ -287,7 +290,8 @@
     dCtx.lineCap = 'round';
 
     const density   = _state.density;
-    const gridStep  = Math.max(5, Math.round(32 - density * 22));   // lower floor = finer strokes at high density
+    _scale = h / 480;  // proportional scale so preview matches export
+    const gridStep  = Math.round(Math.max(5, 32 - density * 22) * _scale);
     const baseLen   = gridStep * 4.5;
     const baseWidth = gridStep * 1.9;
 
@@ -302,7 +306,10 @@
         const sLen = baseLen   * (0.72 + _rng() * 0.56);
         const sWid = baseWidth * (0.68 + _rng() * 0.64);
 
-        const angle = flowAngleAt(px, w, h, jx | 0, jy | 0) + (_rng() - 0.5) * 0.4;
+        const baseAngle = _state.randomDir
+          ? flowAngleAt(px, w, h, jx | 0, jy | 0)
+          : (_state.strokeAngle * Math.PI / 180);
+        const angle = baseAngle + (_rng() - 0.5) * 0.4;
 
         drawStroke(dCtx, jx, jy, angle, sLen, sWid, sr, sg, sb, _state.edgeSpread);
       }
@@ -338,6 +345,23 @@
             { value: 'rough', label: 'Rough' },
             { value: 'liner', label: 'Liner' },
           ],
+        },
+      ],
+    },
+    {
+      title: 'DIRECTION',
+      specs: [
+        {
+          key: 'randomDir', label: 'Follow Image Edges', type: 'toggle',
+          options: [
+            { value: true,  label: 'On'  },
+            { value: false, label: 'Off' },
+          ],
+        },
+        {
+          key: 'strokeAngle', label: 'Stroke Angle', type: 'slider',
+          min: 0, max: 180, step: 1,
+          fmt: v => v + '°',
         },
       ],
     },
