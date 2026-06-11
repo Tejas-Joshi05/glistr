@@ -302,6 +302,8 @@
 
         const si  = ((jy | 0) * w + (jx | 0)) * 4;
         const sr  = px[si], sg = px[si+1], sb = px[si+2];
+        const sa  = px[si+3];
+        if (sa < 5) continue;  // skip fully transparent areas
 
         const sLen = baseLen   * (0.72 + _rng() * 0.56);
         const sWid = baseWidth * (0.68 + _rng() * 0.64);
@@ -311,7 +313,9 @@
           : (_state.strokeAngle * Math.PI / 180);
         const angle = baseAngle + (_rng() - 0.5) * _state.angleJitter * Math.PI;
 
+        dCtx.globalAlpha = sa / 255;
         drawStroke(dCtx, jx, jy, angle, sLen, sWid, sr, sg, sb, _state.edgeSpread);
+        dCtx.globalAlpha = 1;
       }
     }
   }

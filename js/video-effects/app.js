@@ -29,6 +29,7 @@ window.VideoEffects = window.VideoEffects || {};
   VideoEffects.register    = function (name, def) { _registry[name] = def; };
   VideoEffects.getVideo    = function () { return _shared.video; };
   VideoEffects.getHasVideo = function () { return _shared.hasVideo; };
+  VideoEffects.hiRes       = false;
 
   VideoEffects.setVideoInfo = function (text) {
     var el = document.getElementById('video-info');
@@ -284,6 +285,24 @@ window.VideoEffects = window.VideoEffects || {};
       });
     }
 
+    // HD Preview toggle
+    document.getElementById('btn-hires-preview').addEventListener('click', function () {
+      VideoEffects.hiRes = !VideoEffects.hiRes;
+      var btn = document.getElementById('btn-hires-preview');
+      btn.classList.toggle('btn--active', VideoEffects.hiRes);
+      btn.textContent = VideoEffects.hiRes ? 'HD Preview: On' : 'HD Preview';
+      if (_shared.hasVideo) {
+        var v = _shared.video;
+        var vw = v.videoWidth, vh = v.videoHeight;
+        for (var key in _registry) {
+          if (_registry[key].onVideoLoad) _registry[key].onVideoLoad(v, vw, vh);
+        }
+        if (_active && _registry[_active] && _registry[_active].activate) {
+          _registry[_active].activate();
+        }
+      }
+    });
+
     // Zoom buttons
     document.getElementById('btn-zoom-in').addEventListener('click', function () { zoomBy(ZOOM_STEP); });
     document.getElementById('btn-zoom-out').addEventListener('click', function () { zoomBy(1 / ZOOM_STEP); });
@@ -315,6 +334,14 @@ window.VideoEffects = window.VideoEffects || {};
 
     requestAnimationFrame(tick);
   });
+
+  // ── Tab sorting — disabled tabs sink to bottom ────────────────────────────
+
+  function sortTabs() {
+    document.querySelectorAll('.effect-tab').forEach(function (tab) {
+      tab.style.order = tab.disabled ? '1' : '0';
+    });
+  }
 
   // ── Tab switching ──────────────────────────────────────────────────────────
 
@@ -363,6 +390,7 @@ window.VideoEffects = window.VideoEffects || {};
 
     var blobTab = document.querySelector('.effect-tab[data-tab="blob"]');
     if (blobTab) blobTab.disabled = false;
+    sortTabs();
 
     _realVideo.onloadedmetadata = function () {
       _shared.hasVideo = true;
@@ -423,6 +451,7 @@ window.VideoEffects = window.VideoEffects || {};
         blobTab.disabled = true;
         if (_active === 'blob') switchTo('dither');
       }
+      sortTabs();
 
       for (var key in _registry) {
         var def = _registry[key];

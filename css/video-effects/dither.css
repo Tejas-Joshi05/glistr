@@ -500,6 +500,7 @@ details[open] .controls-section__header::after { content: '−'; }
 
 .btn:hover:not(:disabled) { color: var(--text); border-color: var(--text-2); }
 .btn:disabled { opacity: 0.28; cursor: default; }
+.btn--active { color: var(--text); border-color: var(--text); }
 
 .toolbar-sep { flex: 1; }
 

@@ -22,14 +22,13 @@
   let frameCount = 0;
   let _exporting = false, _cancelExport = false;
 
-  const PREVIEW_MAX_H = 480;
-
   // ── Sizing ──────────────────────────────────────────────────────────────────
 
   function previewSize(vw, vh) {
-    if (vh <= PREVIEW_MAX_H) return [vw, vh];
-    const s = PREVIEW_MAX_H / vh;
-    return [Math.round(vw * s), PREVIEW_MAX_H];
+    const cap = VideoEffects.hiRes ? Infinity : 480;
+    if (vh <= cap) return [vw, vh];
+    const s = cap / vh;
+    return [Math.round(vw * s), cap];
   }
 
   function setupCanvases(vw, vh) {
