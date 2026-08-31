@@ -31,6 +31,21 @@ window.GenAudio = window.GenAudio || {};
   let   hIndex  = 0, hFilled = 0;
   let   beatCooldown = 0;
 
+  // Rolling peak per band. Each band is measured against its own recent
+  // loudest moment rather than an absolute ceiling, so a hot master doesn't
+  // pin every band at 1 — and a quiet passage still reads.
+  const peaks = { bass: 0.25, mid: 0.25, high: 0.25, level: 0.25 };
+  const PEAK_FLOOR  = 0.06;   // never divide by ~0 and amplify silence
+  const PEAK_FALL   = 0.16;   // reference decay, per second
+  const PEAK_ATTACK = 0.35;   // seconds to catch a new maximum
+
+  // Linear through the useful range, easing into the ceiling only at the top,
+  // so a loud passage still has somewhere to go instead of flat-topping.
+  function knee(x) {
+    if (x <= 0.85) return x < 0 ? 0 : x;
+    return 0.85 + (1 - Math.exp(-(x - 0.85) * 2.2)) * 0.15;
+  }
+
   // Beat interval history, for the BPM readout
   const INTERVALS = 12;
   const intervals = [];
@@ -39,7 +54,7 @@ window.GenAudio = window.GenAudio || {};
   GenAudio.bpm       = 0;            // 0 until enough beats to be confident
   GenAudio.source    = 'off';        // 'off' | 'mic' | 'file'
   GenAudio.fileName  = '';
-  GenAudio.gain      = 1.4;
+  GenAudio.gain      = 1.0;
   GenAudio.smoothing = 0.72;
   GenAudio.beatCount = 0;            // increments once per detected kick
   GenAudio.bands     = { level: 0, bass: 0, mid: 0, high: 0, beat: 0 };
@@ -100,6 +115,8 @@ window.GenAudio = window.GenAudio || {};
   GenAudio.stop = function () {
     disconnect();
     stopLoop();
+    for (const key in peaks) peaks[key] = 0.25;
+    specPeak = 0.25;
     intervals.length = 0;
     GenAudio.bpm    = 0;
     GenAudio.source   = 'off';
@@ -193,13 +210,15 @@ window.GenAudio = window.GenAudio || {};
   // Log-spaced bins in 0..1, for effects that draw the spectrum itself.
   // With no source running it returns false so callers can fake something.
 
+  let specPeak = 0.25;
+
   GenAudio.getSpectrum = function (out, n) {
     if (!GenAudio.isActive()) return false;
     analyser.getByteFrequencyData(freqData);
     const lo = 30, hi = 14000;
     const binHz = ctxA.sampleRate / FFT;
     const ratio = Math.pow(hi / lo, 1 / n);
-    let f0 = lo;
+    let f0 = lo, loudest = 0;
     for (let i = 0; i < n; i++) {
       const f1 = f0 * ratio;
       let a = Math.max(1, Math.round(f0 / binHz));
@@ -208,9 +227,16 @@ window.GenAudio = window.GenAudio || {};
       for (let j = a; j < b; j++) sum += freqData[j];
       // Tilt the top end up — music has far less energy up there
       const tilt = 1 + (i / n) * 1.4;
-      out[i] = Math.min(1, (sum / ((b - a) * 255)) * GenAudio.gain * tilt);
+      out[i] = (sum / ((b - a) * 255)) * tilt;
+      if (out[i] > loudest) loudest = out[i];
       f0 = f1;
     }
+
+    // Same treatment as the bands: measure against the recent peak and ease
+    // into the ceiling, so a loud track still has visible movement.
+    specPeak = Math.max(loudest > specPeak ? specPeak + (loudest - specPeak) * 0.06
+                                           : specPeak * 0.995, 0.06);
+    for (let i = 0; i < n; i++) out[i] = knee((out[i] / specPeak) * GenAudio.gain);
     return true;
   };
 
@@ -239,21 +265,35 @@ window.GenAudio = window.GenAudio || {};
 
     const gain = GenAudio.gain;
     const raw = {
-      bass:  bandEnergy(at(25),   at(160))  * gain,
-      mid:   bandEnergy(at(160),  at(2000)) * gain,
-      high:  bandEnergy(at(2000), at(9000)) * gain * 1.6,
-      level: bandEnergy(at(25),   at(9000)) * gain,
+      bass:  bandEnergy(at(25),   at(160)),
+      mid:   bandEnergy(at(160),  at(2000)),
+      high:  bandEnergy(at(2000), at(9000)) * 1.6,
+      level: bandEnergy(at(25),   at(9000)),
     };
 
-    // Exponential smoothing, frame-rate independent
-    const k = 1 - Math.pow(1 - (1 - GenAudio.smoothing), Math.min(1, dt * 60));
+    // The reference climbs toward a new maximum over ~a third of a second and
+    // sags back slowly. Rising gradually is what keeps transients readable: a
+    // kick louder than the recent norm briefly exceeds its own reference
+    // instead of instantly redefining it.
+    const rise = 1 - Math.exp(-dt / PEAK_ATTACK);
+    const fall = Math.exp(-PEAK_FALL * dt);
+    const norm = {};
     for (const key in raw) {
-      const v = Math.min(1, raw[key]);
-      b[key] += (v - b[key]) * k;
+      const p = peaks[key];
+      peaks[key] = Math.max(
+        raw[key] > p ? p + (raw[key] - p) * rise : p * fall,
+        PEAK_FLOOR
+      );
+      norm[key] = knee((raw[key] / peaks[key]) * gain);
     }
 
+    const k = 1 - Math.pow(1 - (1 - GenAudio.smoothing), Math.min(1, dt * 60));
+    for (const key in norm) b[key] += (norm[key] - b[key]) * k;
+
     // ── Beat detection: bass energy against its recent average ────────────
-    const inst = raw.bass;
+    // Uses the normalised value so the absolute floor below means the same
+    // thing at any master level.
+    const inst = norm.bass;
     let avg = 0;
     const n = hFilled || 1;
     for (let i = 0; i < n; i++) avg += history[i];
