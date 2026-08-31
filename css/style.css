@@ -1,15 +1,43 @@
-/* ── Design tokens — B&W minimalist ─────────────────────────────────────── */
+/* ── Design tokens ────────────────────────────────────────────────────────
+   Neutral, near-black chrome so canvas output reads true, with one accent
+   used sparingly for active/selected state. Swap --accent to re-skin.        */
 :root {
-  --bg:       #0c0c0c;
-  --bg-2:     #111111;
-  --surface:  #181818;
-  --border:   #242424;
-  --border-2: #333333;
-  --text:     #f0f0f0;
-  --text-2:   #999999;
-  --muted:    #555555;
-  --font:     system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --radius:   3px;
+  /* Surfaces — darkest at the canvas, lifting toward the chrome */
+  --bg:        #08090a;
+  --bg-2:      #0d0e10;
+  --panel:     #111214;
+  --panel-2:   #16181b;
+  --surface:   #1d2024;
+  --surface-2: #24282d;
+
+  /* Lines */
+  --border:    #1c1f23;
+  --border-2:  #2a2f35;
+  --border-3:  #3a4149;
+
+  /* Type */
+  --text:      #eceef0;
+  --text-2:    #9aa3ac;
+  --muted:     #626b75;
+  --faint:     #444c55;
+
+  /* Accent */
+  --accent:     #c9f24d;
+  --accent-dim: #96b93a;
+  --accent-ink: #12160a;
+  --warn:       #ff8f5e;
+
+  /* Warn zone painted under a slider's value fill */
+  --warn-track: rgba(255, 143, 94, 0.3);
+
+  --font: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --radius:    7px;
+  --radius-sm: 5px;
+
+  --shadow:    0 1px 2px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.35);
+  --ease:      cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
 /* ── Base ────────────────────────────────────────────────────────────────── */
@@ -22,11 +50,25 @@ body {
   height: 100dvh;
   overflow: hidden;
   display: flex;
+  font-size: 14px;
+  letter-spacing: -0.005em;
 }
 
 a { color: inherit; text-decoration: none; }
 button { font-family: var(--font); }
 
-::-webkit-scrollbar { width: 5px; height: 5px; }
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-radius: var(--radius-sm);
+}
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 3px; }
+::-webkit-scrollbar-thumb {
+  background: var(--border-2);
+  border-radius: 99px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--border-3); background-clip: content-box; }

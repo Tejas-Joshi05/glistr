@@ -333,7 +333,12 @@
       displayCtx.shadowBlur = 0;
     }
 
-    prevFrameData = curr.data.slice(); // copy current frame for next diff
+    // Reuse the previous-frame buffer — a fresh .slice() every frame churned
+    // ~1 MB per frame through the GC.
+    if (prevFrameData === null || prevFrameData.length !== curr.data.length) {
+      prevFrameData = new Uint8ClampedArray(curr.data.length);
+    }
+    prevFrameData.set(curr.data);
   }
 
   function drawEmptyState() {
@@ -487,8 +492,12 @@
       captureCanvas.width  = cw;
       captureCanvas.height = ch;
 
-      displayCanvas.width  = vw;
-      displayCanvas.height = vh;
+      const cap = VideoEffects.hiRes ? Infinity : 480;
+      let dw = vw, dh = vh;
+      if (dh > cap) { const ds = cap / dh; dw = Math.round(vw * ds); dh = cap; }
+      displayCanvas.width  = dw;
+      displayCanvas.height = dh;
+      VideoEffects.setVideoInfo(`${vw}×${vh}` + (dw < vw ? `  ·  preview ${dw}×${dh}` : ''));
 
       prevFrameData = null;
       dirty = true;

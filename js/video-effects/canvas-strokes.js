@@ -31,6 +31,7 @@
   let _hasVideo = false;
   let _isImage  = false;
   let dirty     = true;
+  let _lastRenderedTime = -1;   // skip re-rendering a frame the video already showed
   let _exporting = false, _cancelExport = false;
 
   // ── Sizing ─────────────────────────────────────────────────────────────────
@@ -73,24 +74,33 @@
   // ── Edge-following angle at a pixel (Sobel, perpendicular to gradient) ────
 
   function flowAngleAt(data, w, h, x, y) {
-    const xi = Math.max(1, Math.min(w - 2, x | 0));
-    const yi = Math.max(1, Math.min(h - 2, y | 0));
-    const L  = (px, py) => {
-      const i = (py * w + px) * 4;
-      return 0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2];
-    };
-    const gx = -L(xi-1,yi-1) + L(xi+1,yi-1)
-              - 2*L(xi-1,yi) + 2*L(xi+1,yi)
-              - L(xi-1,yi+1) + L(xi+1,yi+1);
-    const gy = -L(xi-1,yi-1) - 2*L(xi,yi-1) - L(xi+1,yi-1)
-              +  L(xi-1,yi+1) + 2*L(xi,yi+1) + L(xi+1,yi+1);
+    const xi = x < 1 ? 1 : x > w - 2 ? w - 2 : x;
+    const yi = y < 1 ? 1 : y > h - 2 ? h - 2 : y;
+    const rowT = ((yi - 1) * w + xi) * 4;
+    const rowM = ( yi      * w + xi) * 4;
+    const rowB = ((yi + 1) * w + xi) * 4;
+    const tl = 0.299 * data[rowT-4] + 0.587 * data[rowT-3] + 0.114 * data[rowT-2];
+    const tc = 0.299 * data[rowT]   + 0.587 * data[rowT+1] + 0.114 * data[rowT+2];
+    const tr = 0.299 * data[rowT+4] + 0.587 * data[rowT+5] + 0.114 * data[rowT+6];
+    const ml = 0.299 * data[rowM-4] + 0.587 * data[rowM-3] + 0.114 * data[rowM-2];
+    const mr = 0.299 * data[rowM+4] + 0.587 * data[rowM+5] + 0.114 * data[rowM+6];
+    const bl = 0.299 * data[rowB-4] + 0.587 * data[rowB-3] + 0.114 * data[rowB-2];
+    const bc = 0.299 * data[rowB]   + 0.587 * data[rowB+1] + 0.114 * data[rowB+2];
+    const br = 0.299 * data[rowB+4] + 0.587 * data[rowB+5] + 0.114 * data[rowB+6];
+    const gx = -tl + tr - 2 * ml + 2 * mr - bl + br;
+    const gy = -tl - 2 * tc - tr + bl + 2 * bc + br;
     return Math.atan2(gx, -gy);
   }
 
   // ── Shared: build outline edge arrays ─────────────────────────────────────
 
+  const MAX_OUTLINE_N = 32;
+  const _topX = new Float64Array(MAX_OUTLINE_N + 1);
+  const _topY = new Float64Array(MAX_OUTLINE_N + 1);
+  const _botX = new Float64Array(MAX_OUTLINE_N + 1);
+  const _botY = new Float64Array(MAX_OUTLINE_N + 1);
+
   function buildOutline(cx, cy, cos, sin, px, py, length, halfW, taperExp, noiseScale, N) {
-    const top = [], bot = [];
     for (let i = 0; i <= N; i++) {
       const t     = i / N;
       const along = (t - 0.5) * length;
@@ -99,17 +109,17 @@
       const hw    = halfW * taper + noise;
       const bx    = cx + cos * along;
       const by    = cy + sin * along;
-      top.push({ x: bx + px * hw, y: by + py * hw });
-      bot.push({ x: bx - px * hw, y: by - py * hw });
+      _topX[i] = bx + px * hw; _topY[i] = by + py * hw;
+      _botX[i] = bx - px * hw; _botY[i] = by - py * hw;
     }
-    return { top, bot };
+    return N;
   }
 
-  function fillOutline(ctx, top, bot, r, g, b, alpha) {
+  function fillOutline(ctx, N, r, g, b, alpha) {
     ctx.beginPath();
-    ctx.moveTo(top[0].x, top[0].y);
-    for (const p of top) ctx.lineTo(p.x, p.y);
-    for (let i = bot.length - 1; i >= 0; i--) ctx.lineTo(bot[i].x, bot[i].y);
+    ctx.moveTo(_topX[0], _topY[0]);
+    for (let i = 1; i <= N; i++) ctx.lineTo(_topX[i], _topY[i]);
+    for (let i = N; i >= 0; i--) ctx.lineTo(_botX[i], _botY[i]);
     ctx.closePath();
     ctx.fillStyle = `rgba(${r|0},${g|0},${b|0},${alpha})`;
     ctx.fill();
@@ -166,8 +176,8 @@
     const cos = Math.cos(angle), sin = Math.sin(angle);
     const px = -sin, py = cos;
     const halfLen = length / 2, halfW = width / 2;
-    const { top, bot } = buildOutline(cx, cy, cos, sin, px, py, length, halfW, 0.55, 0.38, 28);
-    fillOutline(ctx, top, bot, r, g, b, 0.84);
+    const N = buildOutline(cx, cy, cos, sin, px, py, length, halfW, 0.55, 0.38, 28);
+    fillOutline(ctx, N, r, g, b, 0.84);
     drawSideBristles(ctx, cx, cy, cos, sin, px, py, length, halfW, 0.55, edgeSpread, halfW * 0.6,  16 + Math.round(length / 5), r, g, b);
     drawEndBristles (ctx, cx, cy, cos, sin, px, py, halfLen, width, edgeSpread, halfW * 1.1, 12 + Math.round(halfW / 2.5), r, g, b);
   }
@@ -179,8 +189,8 @@
     const cos = Math.cos(angle), sin = Math.sin(angle);
     const px = -sin, py = cos;
     const halfLen = length / 2, halfW = width / 2;
-    const { top, bot } = buildOutline(cx, cy, cos, sin, px, py, length, halfW, 0.65, 0.20, 24);
-    fillOutline(ctx, top, bot, r, g, b, 0.78);
+    const N = buildOutline(cx, cy, cos, sin, px, py, length, halfW, 0.65, 0.20, 24);
+    fillOutline(ctx, N, r, g, b, 0.78);
 
     // Internal parallel bristle streaks (lighter, low alpha)
     const lr = Math.min(255, r + 50) | 0;
@@ -214,8 +224,8 @@
     const px = -sin, py = cos;
     const halfLen = length / 2;
     const halfW   = width / 2 * 1.40;   // wider body
-    const { top, bot } = buildOutline(cx, cy, cos, sin, px, py, length, halfW, 0.38, 0.46, 32);
-    fillOutline(ctx, top, bot, r, g, b, 0.80);
+    const N = buildOutline(cx, cy, cos, sin, px, py, length, halfW, 0.38, 0.46, 32);
+    fillOutline(ctx, N, r, g, b, 0.80);
 
     // Internal grain — many short horizontal marks
     const grainCount = 50 + Math.round((length * halfW * 2) / 35);
@@ -251,8 +261,8 @@
     const px = -sin, py = cos;
     const halfLen = length / 2;
     const halfW   = width / 2 * 0.30;   // much narrower
-    const { top, bot } = buildOutline(cx, cy, cos, sin, px, py, length, halfW, 2.0, 0.16, 20);
-    fillOutline(ctx, top, bot, r, g, b, 0.92);
+    const N = buildOutline(cx, cy, cos, sin, px, py, length, halfW, 2.0, 0.16, 20);
+    fillOutline(ctx, N, r, g, b, 0.92);
     drawSideBristles(ctx, cx, cy, cos, sin, px, py, length, halfW, 2.0, edgeSpread, halfW * 0.55, 4 + Math.round(length / 12), r, g, b);
     // No end fan — liner tapers to a clean point
   }
@@ -278,10 +288,7 @@
     wCtx.drawImage(v, 0, 0, w, h);
 
     const imgData = wCtx.getImageData(0, 0, w, h);
-    if (_state.contrast > 0.02) {
-      applyContrast(imgData.data, _state.contrast);
-      wCtx.putImageData(imgData, 0, 0);
-    }
+    if (_state.contrast > 0.02) applyContrast(imgData.data, _state.contrast);
     const px = imgData.data;
 
     dCtx.clearRect(0, 0, w, h);
@@ -647,7 +654,7 @@
 
     init: function (canvas, controlsEl) {
       displayCanvas = canvas;
-      displayCtx    = canvas.getContext('2d', { willReadFrequently: true });
+      displayCtx    = canvas.getContext('2d');
       displayCanvas.width  = 854;
       displayCanvas.height = 480;
 
@@ -668,7 +675,7 @@
       setupCanvases(vw, vh);
     },
 
-    activate:   function () { dirty = true; },
+    activate:   function () { dirty = true; _lastRenderedTime = -1; },
     deactivate: function () {},
 
     tick: function (v, hasVideo) {
@@ -682,7 +689,12 @@
         return;
       }
 
+      // rAF runs at 60Hz but video decodes at ~24–30fps — re-rendering the same
+      // frame is pure waste, and this is the most expensive effect.
+      if (!dirty && v.currentTime === _lastRenderedTime) return;
+
       renderCanvasStrokes(v, displayCtx, displayCanvas, workCanvas, workCtx);
+      _lastRenderedTime = v.currentTime;
       dirty = false;
     },
 
@@ -690,6 +702,6 @@
     exportFullRes: exportFullRes,
     cancelExport:  function () { _cancelExport = true; },
 
-    onSeek: function () { dirty = true; },
+    onSeek: function () { dirty = true; _lastRenderedTime = -1; },
   });
 })();

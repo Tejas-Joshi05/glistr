@@ -31,6 +31,33 @@ window.VideoEffects = window.VideoEffects || {};
   VideoEffects.getHasVideo = function () { return _shared.hasVideo; };
   VideoEffects.hiRes       = false;
 
+  VideoEffects.isGenerative = function (name) {
+    return !!(_registry[name] && _registry[name].generative);
+  };
+
+  // Frame-rate readout used by generative effects
+  VideoEffects.setGenFps = function (fps) {
+    var el = document.getElementById('gen-fps');
+    if (el) el.textContent = fps ? fps + ' fps' : '';
+  };
+
+  // Three-band meter in the toolbar; also flashes on each detected beat.
+  VideoEffects.setAudioMeter = function (bands, active) {
+    var meter = document.getElementById('audio-meter');
+    if (!meter) return;
+    if (!active) { meter.style.display = 'none'; return; }
+    meter.style.display = '';
+    meter.style.setProperty('--bass', (bands.bass * 100).toFixed(0) + '%');
+    meter.style.setProperty('--mid',  (bands.mid  * 100).toFixed(0) + '%');
+    meter.style.setProperty('--high', (bands.high * 100).toFixed(0) + '%');
+    meter.style.setProperty('--beat', bands.beat.toFixed(2));
+  };
+
+  // Range inputs paint their filled portion from a --pct custom property.
+  VideoEffects.refreshSliderFills = function (root) {
+    (root || document).querySelectorAll('.control__slider').forEach(setSliderFill);
+  };
+
   VideoEffects.setVideoInfo = function (text) {
     var el = document.getElementById('video-info');
     if (el) el.textContent = text;
@@ -55,6 +82,73 @@ window.VideoEffects = window.VideoEffects || {};
   };
 
   // ── Helpers ────────────────────────────────────────────────────────────────
+
+  function setSliderFill(el) {
+    var min = parseFloat(el.min) || 0;
+    var max = parseFloat(el.max);
+    if (!isFinite(max) || max === min) return;
+    var pct = ((parseFloat(el.value) - min) / (max - min)) * 100;
+    el.style.setProperty('--pct', pct.toFixed(2) + '%');
+  }
+
+  // Reflects the active effect's play state onto the toolbar button.
+  VideoEffects.syncPlayButton = function () {
+    var btn = document.getElementById('btn-play');
+    var def = _active && _registry[_active];
+    if (def && def.generative) {
+      btn.disabled    = false;
+      btn.textContent = def.isPlaying() ? 'Pause' : 'Play';
+      return;
+    }
+    btn.disabled    = !_shared.hasVideo || _shared.isImage;
+    btn.textContent = (_shared.hasVideo && !_realVideo.paused) ? 'Pause' : 'Play';
+  };
+
+  // Swaps the chrome between video mode (seek bar, file buttons) and
+  // generative mode (self-driven animation, recorder).
+  function applyModeUI() {
+    var def = _active && _registry[_active];
+    var gen = !!(def && def.generative);
+
+    document.body.classList.toggle('mode-generative', gen);
+
+    var tab   = document.querySelector('.effect-tab[data-tab="' + _active + '"]');
+    var title = document.getElementById('topbar-title');
+    var desc  = document.getElementById('topbar-desc');
+    var badge = document.getElementById('topbar-badge');
+    if (tab && title) title.textContent = tab.textContent.trim();
+    if (tab && desc)  desc.textContent  = tab.dataset.desc || '';
+    if (badge) {
+      badge.textContent = gen ? 'Generative' : 'Source: Video / Image';
+      badge.classList.toggle('topbar__badge--gen', gen);
+    }
+
+    var hint = document.getElementById('canvas-hint');
+    if (hint) {
+      var text = gen ? (def.hint || '') : '';
+      hint.textContent   = text;
+      hint.style.display = text ? '' : 'none';
+    }
+
+    document.getElementById('btn-export-frame').disabled = !(gen || _shared.hasVideo);
+    document.getElementById('btn-export-fullres').disabled = !(
+      gen ||
+      (_shared.hasVideo && !_shared.isImage && !!(def && def.exportFullRes))
+    );
+    document.getElementById('btn-export-fullres').textContent = gen ? 'Record Clip' : 'Export Video';
+
+    var fps = document.getElementById('gen-fps');
+    if (fps) { fps.style.display = gen ? '' : 'none'; fps.textContent = ''; }
+
+    // Audio drives generative effects, but the controls stay reachable from
+    // every tab so the source can be set up before switching.
+    var audioBtn = document.getElementById('btn-audio');
+    if (audioBtn) audioBtn.title = gen
+      ? 'Audio reactivity — source, levels, beat'
+      : 'Audio reactivity — set a source here, then pick a generative effect';
+
+    VideoEffects.syncPlayButton();
+  }
 
   function formatTime(s) {
     var m = Math.floor(s / 60);
@@ -149,7 +243,16 @@ window.VideoEffects = window.VideoEffects || {};
     if (firstTab) {
       _active = firstTab.dataset.tab;
       if (_registry[_active] && _registry[_active].activate) _registry[_active].activate();
+      applyModeUI();
     }
+
+    // Paint every range input's filled track, now and as they move
+    document.addEventListener('input', function (e) {
+      if (e.target.classList && e.target.classList.contains('control__slider')) {
+        setSliderFill(e.target);
+      }
+    });
+    VideoEffects.refreshSliderFills();
 
     document.getElementById('video-input').addEventListener('change', function (e) {
       if (e.target.files[0]) loadMedia(e.target.files[0]);
@@ -332,6 +435,39 @@ window.VideoEffects = window.VideoEffects || {};
       if (_registry[_active] && _registry[_active].onSeek) _registry[_active].onSeek();
     });
 
+    // ── Keyboard shortcuts ────────────────────────────────────────────
+    document.addEventListener('keydown', function (e) {
+      var t = e.target;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' ||
+                t.tagName === 'SELECT' || t.isContentEditable)) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+      switch (e.key) {
+        case ' ':
+        case 'k':
+        case 'K':
+          e.preventDefault();       // stop Space from re-clicking a focused button
+          togglePlay();
+          break;
+
+        case 'ArrowLeft':
+        case 'ArrowRight': {
+          var def = _active && _registry[_active];
+          if (!_shared.hasVideo || _shared.isImage || (def && def.generative)) return;
+          e.preventDefault();
+          var delta = e.key === 'ArrowRight' ? 5 : -5;
+          if (e.shiftKey) delta = delta / 5;
+          _realVideo.currentTime = Math.max(0,
+            Math.min(_realVideo.duration || 0, _realVideo.currentTime + delta));
+          updateSeekDisplay(_realVideo.currentTime, _realVideo.duration);
+          document.getElementById('seek-slider').value =
+            (_realVideo.currentTime / _realVideo.duration) * 10000;
+          if (def && def.onSeek) def.onSeek();
+          break;
+        }
+      }
+    });
+
     requestAnimationFrame(tick);
   });
 
@@ -362,12 +498,8 @@ window.VideoEffects = window.VideoEffects || {};
     _active = name;
     if (_registry[_active] && _registry[_active].activate) _registry[_active].activate();
 
-    var btnFull = document.getElementById('btn-export-fullres');
-    btnFull.disabled = !(
-      _shared.hasVideo &&
-      !_shared.isImage &&
-      !!(_registry[_active] && _registry[_active].exportFullRes)
-    );
+    applyModeUI();
+    VideoEffects.refreshSliderFills();
 
     // Close mobile controls panel on tab switch
     closeMobileControls();
@@ -400,11 +532,7 @@ window.VideoEffects = window.VideoEffects || {};
         if (def.onVideoLoad) def.onVideoLoad(_realVideo, _realVideo.videoWidth, _realVideo.videoHeight);
       }
 
-      document.getElementById('btn-play').disabled    = false;
-      document.getElementById('btn-play').textContent = 'Pause';
-
-      var btnFull = document.getElementById('btn-export-fullres');
-      btnFull.disabled = !(_registry[_active] && _registry[_active].exportFullRes);
+      applyModeUI();
 
       document.querySelectorAll('.drop-overlay').forEach(function (o) { o.classList.add('hidden'); });
 
@@ -417,6 +545,7 @@ window.VideoEffects = window.VideoEffects || {};
       var cfb = document.getElementById('btn-change-file');
       if (cfb) cfb.style.display = '';
       _realVideo.play();
+      VideoEffects.syncPlayButton();
     };
   }
 
@@ -458,9 +587,7 @@ window.VideoEffects = window.VideoEffects || {};
         if (def.onVideoLoad) def.onVideoLoad(imgCanvas, img.naturalWidth, img.naturalHeight);
       }
 
-      document.getElementById('btn-play').disabled    = true;
-      document.getElementById('btn-play').textContent = 'Play';
-      document.getElementById('btn-export-fullres').disabled = true;
+      applyModeUI();
 
       document.querySelectorAll('.drop-overlay').forEach(function (o) { o.classList.add('hidden'); });
 
@@ -479,14 +606,16 @@ window.VideoEffects = window.VideoEffects || {};
   // ── Play / Pause ───────────────────────────────────────────────────────────
 
   function togglePlay() {
-    if (!_shared.hasVideo || _shared.isImage) return;
-    if (_realVideo.paused) {
-      _realVideo.play();
-      document.getElementById('btn-play').textContent = 'Pause';
-    } else {
-      _realVideo.pause();
-      document.getElementById('btn-play').textContent = 'Play';
+    var def = _active && _registry[_active];
+    if (def && def.generative) {
+      def.setPlaying(!def.isPlaying());
+      VideoEffects.syncPlayButton();
+      return;
     }
+    if (!_shared.hasVideo || _shared.isImage) return;
+    if (_realVideo.paused) _realVideo.play();
+    else                   _realVideo.pause();
+    VideoEffects.syncPlayButton();
   }
 
   // ── Render loop ────────────────────────────────────────────────────────────

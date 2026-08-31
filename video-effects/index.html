@@ -3,34 +3,87 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>glistr</title>
+    <title>Glistr — video effects &amp; generative studio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;650&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="../css/reset.css" />
     <link rel="stylesheet" href="../css/style.css" />
-    <link rel="stylesheet" href="../css/video-effects/dither.css" />
+    <link rel="stylesheet" href="../css/app.css" />
   </head>
   <body>
 
     <!-- ── Sidebar ─────────────────────────────────────────────────────────── -->
     <aside class="sidebar">
       <div class="sidebar-brand">
-        <div class="sidebar-brand__name">Glistr</div>
+        <div class="sidebar-brand__row">
+          <div class="sidebar-brand__mark"></div>
+          <div class="sidebar-brand__name">Glistr</div>
+        </div>
         <div class="sidebar-brand__by">by <a class="sidebar-brand__link" href="https://www.instagram.com/tj_animates/" target="_blank" rel="noopener">Tejas Joshi</a></div>
       </div>
+
       <nav class="sidebar-nav">
-        <button class="effect-tab active" data-tab="dither">Dither</button>
-        <button class="effect-tab" data-tab="ascii">ASCII Art</button>
-        <button class="effect-tab" data-tab="blob">Blob Tracker</button>
-        <button class="effect-tab" data-tab="glitch">Glitch</button>
-        <button class="effect-tab" data-tab="vintage">Vintage</button>
-        <button class="effect-tab" data-tab="canvas-strokes">Canvas Strokes</button>
+        <div class="nav-group">
+          <div class="nav-group__label">Source Effects</div>
+        <button class="effect-tab active" data-tab="dither"
+                data-desc="Ordered, error-diffusion and noise dithering with palette control">Dither</button>
+        <button class="effect-tab" data-tab="ascii"
+                data-desc="Redraws each frame as a grid of characters">ASCII Art</button>
+        <button class="effect-tab" data-tab="blob"
+                data-desc="Frame-difference motion detection with tracking boxes">Blob Tracker</button>
+        <button class="effect-tab" data-tab="glitch"
+                data-desc="Chromatic aberration, slicing, stutter and scanlines">Glitch</button>
+        <button class="effect-tab" data-tab="vintage"
+                data-desc="Film colour, halation, grain and vignette">Vintage</button>
+        <button class="effect-tab" data-tab="canvas-strokes"
+                data-desc="Paints the frame with directional brush strokes">Canvas Strokes</button>
+        </div>
+
+        <div class="nav-group">
+          <div class="nav-group__label">Generative</div>
+        <button class="effect-tab" data-tab="gen-explosion"
+                data-desc="Particle detonations deposited into a heat-mapped glyph grid">ASCII Explosion</button>
+        <button class="effect-tab" data-tab="gen-stream"
+                data-desc="Falling glyph streams with drifting lanes and churning characters">ASCII Stream</button>
+        <button class="effect-tab" data-tab="gen-tunnel"
+                data-desc="Perspective tunnel textured in characters">ASCII Tunnel</button>
+        <button class="effect-tab" data-tab="gen-dither"
+                data-desc="Animated fields quantised through an ordered Bayer dither">Dither Field</button>
+        <button class="effect-tab" data-tab="gen-strobe"
+                data-desc="Grid cells flipping on a tempo or beat clock">Strobe Grid</button>
+        <button class="effect-tab" data-tab="gen-warp"
+                data-desc="Perspective grid rushing at the camera, lunging on the kick">Warp Grid</button>
+        <button class="effect-tab" data-tab="gen-flow"
+                data-desc="Particles advected through an evolving noise field">Flow Field</button>
+        <button class="effect-tab" data-tab="gen-spectrum"
+                data-desc="The analyser itself — bars, mirrored bars or a radial ring">Bar Spectrum</button>
+        <button class="effect-tab" data-tab="gen-feedback"
+                data-desc="Each frame redraws the last one, scaled and rotated">Feedback Zoom</button>
+        <button class="effect-tab" data-tab="gen-automaton"
+                data-desc="Cyclic, Life and smooth cellular automata in glyphs">Glyph Automaton</button>
+        <button class="effect-tab" data-tab="gen-voronoi"
+                data-desc="Moving sites shatter the frame into dithered cells">Voronoi Shatter</button>
+        <button class="effect-tab" data-tab="gen-text"
+                data-desc="Your text eroded, scrambled and reassembled on the beat">Text Mangler</button>
+        <button class="effect-tab" data-tab="gen-corrupt"
+                data-desc="Procedural datamosh — slice shift, channel shear, sync roll">Scanline Corruptor</button>
+        </div>
       </nav>
     </aside>
 
     <!-- ── Main content ────────────────────────────────────────────────────── -->
     <div class="main-content">
 
+      <!-- ── Top bar ─────────────────────────────────────────────────────── -->
+      <header class="topbar">
+        <span class="topbar__title" id="topbar-title">Dither</span>
+        <span class="topbar__desc"  id="topbar-desc"></span>
+        <span class="topbar__badge" id="topbar-badge">Source: Video / Image</span>
+      </header>
+
       <div class="tab-panels-container">
-      <!-- DITHER -->
+
       <div class="tab-panel" id="panel-dither">
         <aside class="controls-panel" id="dither-controls"></aside>
         <div class="canvas-area">
@@ -46,7 +99,7 @@
           </div>
         </div>
       </div>
-      <!-- ASCII -->
+
       <div class="tab-panel" id="panel-ascii" style="display:none">
         <aside class="controls-panel" id="ascii-controls"></aside>
         <div class="canvas-area">
@@ -62,7 +115,7 @@
           </div>
         </div>
       </div>
-      <!-- BLOB -->
+
       <div class="tab-panel" id="panel-blob" style="display:none">
         <aside class="controls-panel" id="blob-controls"></aside>
         <div class="canvas-area">
@@ -78,7 +131,7 @@
           </div>
         </div>
       </div>
-      <!-- GLITCH -->
+
       <div class="tab-panel" id="panel-glitch" style="display:none">
         <aside class="controls-panel" id="glitch-controls"></aside>
         <div class="canvas-area">
@@ -95,7 +148,6 @@
         </div>
       </div>
 
-      <!-- VINTAGE -->
       <div class="tab-panel" id="panel-vintage" style="display:none">
         <aside class="controls-panel" id="vintage-controls"></aside>
         <div class="canvas-area">
@@ -112,7 +164,6 @@
         </div>
       </div>
 
-      <!-- CANVAS STROKES -->
       <div class="tab-panel" id="panel-canvas-strokes" style="display:none">
         <aside class="controls-panel" id="canvas-strokes-controls"></aside>
         <div class="canvas-area">
@@ -129,7 +180,126 @@
         </div>
       </div>
 
-      <!-- Zoom overlay — floats over the canvas area, bottom-right -->
+      <div class="tab-panel" id="panel-gen-explosion" style="display:none">
+        <aside class="controls-panel" id="gen-explosion-controls"></aside>
+        <div class="canvas-area">
+          <div class="canvas-wrapper" id="gen-explosion-wrapper">
+            <canvas id="gen-explosion-canvas"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-panel" id="panel-gen-stream" style="display:none">
+        <aside class="controls-panel" id="gen-stream-controls"></aside>
+        <div class="canvas-area">
+          <div class="canvas-wrapper" id="gen-stream-wrapper">
+            <canvas id="gen-stream-canvas"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-panel" id="panel-gen-tunnel" style="display:none">
+        <aside class="controls-panel" id="gen-tunnel-controls"></aside>
+        <div class="canvas-area">
+          <div class="canvas-wrapper" id="gen-tunnel-wrapper">
+            <canvas id="gen-tunnel-canvas"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-panel" id="panel-gen-dither" style="display:none">
+        <aside class="controls-panel" id="gen-dither-controls"></aside>
+        <div class="canvas-area">
+          <div class="canvas-wrapper" id="gen-dither-wrapper">
+            <canvas id="gen-dither-canvas"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-panel" id="panel-gen-strobe" style="display:none">
+        <aside class="controls-panel" id="gen-strobe-controls"></aside>
+        <div class="canvas-area">
+          <div class="canvas-wrapper" id="gen-strobe-wrapper">
+            <canvas id="gen-strobe-canvas"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-panel" id="panel-gen-warp" style="display:none">
+        <aside class="controls-panel" id="gen-warp-controls"></aside>
+        <div class="canvas-area">
+          <div class="canvas-wrapper" id="gen-warp-wrapper">
+            <canvas id="gen-warp-canvas"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-panel" id="panel-gen-flow" style="display:none">
+        <aside class="controls-panel" id="gen-flow-controls"></aside>
+        <div class="canvas-area">
+          <div class="canvas-wrapper" id="gen-flow-wrapper">
+            <canvas id="gen-flow-canvas"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-panel" id="panel-gen-spectrum" style="display:none">
+        <aside class="controls-panel" id="gen-spectrum-controls"></aside>
+        <div class="canvas-area">
+          <div class="canvas-wrapper" id="gen-spectrum-wrapper">
+            <canvas id="gen-spectrum-canvas"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-panel" id="panel-gen-feedback" style="display:none">
+        <aside class="controls-panel" id="gen-feedback-controls"></aside>
+        <div class="canvas-area">
+          <div class="canvas-wrapper" id="gen-feedback-wrapper">
+            <canvas id="gen-feedback-canvas"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-panel" id="panel-gen-automaton" style="display:none">
+        <aside class="controls-panel" id="gen-automaton-controls"></aside>
+        <div class="canvas-area">
+          <div class="canvas-wrapper" id="gen-automaton-wrapper">
+            <canvas id="gen-automaton-canvas"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-panel" id="panel-gen-voronoi" style="display:none">
+        <aside class="controls-panel" id="gen-voronoi-controls"></aside>
+        <div class="canvas-area">
+          <div class="canvas-wrapper" id="gen-voronoi-wrapper">
+            <canvas id="gen-voronoi-canvas"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-panel" id="panel-gen-text" style="display:none">
+        <aside class="controls-panel" id="gen-text-controls"></aside>
+        <div class="canvas-area">
+          <div class="canvas-wrapper" id="gen-text-wrapper">
+            <canvas id="gen-text-canvas"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-panel" id="panel-gen-corrupt" style="display:none">
+        <aside class="controls-panel" id="gen-corrupt-controls"></aside>
+        <div class="canvas-area">
+          <div class="canvas-wrapper" id="gen-corrupt-wrapper">
+            <canvas id="gen-corrupt-canvas"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Floating overlays — shared across panels -->
+      <div class="canvas-hint" id="canvas-hint" style="display:none"></div>
+
       <div class="zoom-controls" id="zoom-controls">
         <button class="zoom-btn" id="btn-zoom-out">&minus;</button>
         <button class="zoom-btn zoom-level-btn" id="zoom-level">100%</button>
@@ -137,6 +307,48 @@
       </div>
 
       </div><!-- /tab-panels-container -->
+
+      <!-- ── Audio bar — one place to set up the audio reactor ───────────── -->
+      <div class="audio-dock" id="audio-dock">
+        <div class="audio-dock__row">
+          <span class="audio-dock__title">Audio</span>
+
+          <div class="audio-srcs">
+            <button class="audio-src active" data-src="off">Off</button>
+            <button class="audio-src" data-src="mic">Microphone</button>
+            <button class="audio-src" data-src="file">Audio File</button>
+          </div>
+
+          <div class="audio-file" id="audio-file-row" style="display:none">
+            <span class="audio-file__name" id="audio-file-name"></span>
+            <button class="btn" id="audio-file-play">Pause</button>
+          </div>
+
+          <div class="audio-meters" title="Band levels">
+            <div class="audio-bar" id="audio-bar-bass"><div class="audio-bar__track"><i></i></div><span>BASS</span></div>
+            <div class="audio-bar" id="audio-bar-mid"><div class="audio-bar__track"><i></i></div><span>MID</span></div>
+            <div class="audio-bar" id="audio-bar-high"><div class="audio-bar__track"><i></i></div><span>HIGH</span></div>
+          </div>
+
+          <div class="audio-beat" title="Detected beat and tempo">
+            <span class="audio-beat__dot" id="audio-beat"></span>
+            <span class="audio-beat__label">BEAT</span>
+            <span class="audio-beat__bpm" id="audio-bpm">&mdash;</span>
+          </div>
+
+          <label class="audio-knob">Sensitivity
+            <input type="range" class="control__slider" id="audio-gain"
+                   min="0.2" max="5" step="0.05" />
+          </label>
+          <label class="audio-knob">Smoothing
+            <input type="range" class="control__slider" id="audio-smooth"
+                   min="0" max="0.95" step="0.01" />
+          </label>
+
+          <button class="audio-dock__close" id="audio-close" title="Close">&times;</button>
+        </div>
+        <div class="audio-status" id="audio-status"></div>
+      </div>
 
       <!-- ── Shared toolbar ──────────────────────────────────────────────── -->
       <div class="shared-toolbar">
@@ -148,6 +360,13 @@
         </div>
 
         <span id="video-info"></span>
+        <span class="gen-fps" id="gen-fps" style="display:none"></span>
+
+        <div class="audio-meter" id="audio-meter" style="display:none" title="Bass / mid / high">
+          <span class="audio-meter__bar audio-meter__bar--bass"></span>
+          <span class="audio-meter__bar audio-meter__bar--mid"></span>
+          <span class="audio-meter__bar audio-meter__bar--high"></span>
+        </div>
 
         <div id="export-bar" style="display:none">
           <div class="export-track"><div class="export-fill" id="export-fill"></div></div>
@@ -159,12 +378,14 @@
         <button class="btn" id="btn-controls-mobile">Controls</button>
         <div class="toolbar-sep"></div>
 
+        <button class="btn" id="btn-audio" aria-expanded="false"
+                title="Audio reactivity — source, levels, beat">Audio</button>
         <button class="btn" id="btn-hires-preview">HD Preview</button>
-        <button class="btn" id="btn-export-frame">Save Frame</button>
+        <button class="btn" id="btn-export-frame" title="Save the current frame as a PNG">Save Frame</button>
         <button class="btn" id="btn-export-fullres" disabled>Export Video</button>
 
         <input type="file" id="video-input" accept="video/*,image/*" style="display:none" />
-        <button class="btn" id="btn-play" disabled>Play</button>
+        <button class="btn btn--primary" id="btn-play" title="Play / Pause  (Space)" disabled>Play</button>
       </div>
 
     </div><!-- /main-content -->
@@ -182,6 +403,22 @@
     <script src="../js/video-effects/glitch.js"></script>
     <script src="../js/video-effects/vintage.js"></script>
     <script src="../js/video-effects/canvas-strokes.js"></script>
+    <script src="../js/generative/audio.js"></script>
+    <script src="../js/generative/engine.js"></script>
+    <script src="../js/generative/audio-ui.js"></script>
+    <script src="../js/generative/ascii-explosion.js"></script>
+    <script src="../js/generative/ascii-stream.js"></script>
+    <script src="../js/generative/ascii-tunnel.js"></script>
+    <script src="../js/generative/dither-field.js"></script>
+    <script src="../js/generative/strobe-grid.js"></script>
+    <script src="../js/generative/warp-grid.js"></script>
+    <script src="../js/generative/flow-field.js"></script>
+    <script src="../js/generative/bar-spectrum.js"></script>
+    <script src="../js/generative/feedback-zoom.js"></script>
+    <script src="../js/generative/glyph-automaton.js"></script>
+    <script src="../js/generative/voronoi-shatter.js"></script>
+    <script src="../js/generative/text-mangler.js"></script>
+    <script src="../js/generative/scanline-corruptor.js"></script>
 
   </body>
 </html>

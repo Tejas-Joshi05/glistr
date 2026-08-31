@@ -124,30 +124,23 @@ window.DitherApp = window.DitherApp || {};
     return false;
   }
 
-  // Paint a striped clay gradient on the slider track for the warn zone(s).
+  // Marks the danger zone(s) on the slider track. This only hands the
+  // boundaries to CSS as percentages — the stylesheet layers them under the
+  // normal value fill, so both readings stay visible.
   function paintWarnTrack(input, spec) {
     if (!spec.warn) return;
     const range = spec.max - spec.min;
-    const warn  = 'rgba(178, 106, 79, 0.40)';
-    const safe  = 'var(--color-surface-2)';
-    const stops = [];
 
     const lowPct  = spec.warn.below !== undefined
       ? ((spec.warn.below - spec.min) / range) * 100
-      : null;
+      : 0;
     const highPct = spec.warn.above !== undefined
       ? ((spec.warn.above - spec.min) / range) * 100
-      : null;
+      : 100;
 
-    let bg;
-    if (lowPct !== null && highPct !== null) {
-      bg = `linear-gradient(to right, ${warn} 0% ${lowPct}%, ${safe} ${lowPct}% ${highPct}%, ${warn} ${highPct}% 100%)`;
-    } else if (highPct !== null) {
-      bg = `linear-gradient(to right, ${safe} 0% ${highPct}%, ${warn} ${highPct}% 100%)`;
-    } else if (lowPct !== null) {
-      bg = `linear-gradient(to right, ${warn} 0% ${lowPct}%, ${safe} ${lowPct}% 100%)`;
-    }
-    if (bg) input.style.background = bg;
+    input.classList.add('has-warn-zone');
+    input.style.setProperty('--warn-lo', lowPct.toFixed(2) + '%');
+    input.style.setProperty('--warn-hi', highPct.toFixed(2) + '%');
   }
 
   function syncWarnState(input, display, spec, v) {
